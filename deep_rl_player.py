@@ -12,6 +12,8 @@ import sys
 from ale_python_interface import ALEInterface
 import numpy as np
 import pygame
+import matplotlib.pyplot as plt
+from scipy.misc import imresize
 
 key_action_tform_table = (
 0, #00000 none
@@ -48,121 +50,161 @@ key_action_tform_table = (
 14  #11111 fire up/down/left/right (invalid)
 )
 
-if(len(sys.argv) < 2):
-    print("Usage ./ale_python_test_pygame_player.py <ROM_FILE_NAME>")
-    sys.exit()
+class DeepRLPlayer:
+    def __init__(self):
+        self.grayPixels = np.zeros((84, 84), np.float)
     
-ale = ALEInterface()
+    def getActionFromKeys(self):
+        #get the keys
+        keys = 0
+        pressed = pygame.key.get_pressed()
+        keys |= pressed[pygame.K_UP]
+        keys |= pressed[pygame.K_DOWN]  <<1
+        keys |= pressed[pygame.K_LEFT]  <<2
+        keys |= pressed[pygame.K_RIGHT] <<3
+        keys |= pressed[pygame.K_z] <<4
+        a = key_action_tform_table[keys]
+        return a, pressed
 
-max_frames_per_episode = ale.getInt("max_num_frames_per_episode");
-ale.set("random_seed",123)
-
-random_seed = ale.getInt("random_seed")
-print("random_seed: " + str(random_seed))
-
-ale.loadROM(sys.argv[1])
-legal_actions = ale.getMinimalActionSet()
-print legal_actions
-
-(screen_width,screen_height) = ale.getScreenDims()
-print("width/height: " +str(screen_width) + "/" + str(screen_height))
-
-(display_width,display_height) = (1024,420)
-
-#init pygame
-pygame.init()
-screen = pygame.display.set_mode((display_width,display_height))
-pygame.display.set_caption("Arcade Learning Environment Player Agent Display")
-
-game_surface = pygame.Surface((screen_width,screen_height))
-
-pygame.display.flip()
-
-#init clock
-clock = pygame.time.Clock()
-
-episode = 0
-total_reward = 0.0 
-while(episode < 10):
-
-    #get the keys
-    keys = 0
-    pressed = pygame.key.get_pressed()
-    keys |= pressed[pygame.K_UP]
-    keys |= pressed[pygame.K_DOWN]  <<1
-    keys |= pressed[pygame.K_LEFT]  <<2
-    keys |= pressed[pygame.K_RIGHT] <<3
-    keys |= pressed[pygame.K_z] <<4
-    a = key_action_tform_table[keys]
-    reward = ale.act(a);
-    total_reward += reward
-
-    #clear screen
-    screen.fill((0,0,0))
-
-    #get atari screen pixels and blit them
-    numpy_surface = np.frombuffer(game_surface.get_buffer(),dtype=np.int32)
-    ale.getScreenRGB(numpy_surface)
-    del numpy_surface
-    screen.blit(pygame.transform.scale2x(game_surface),(0,0))
-
-    #get RAM
-    ram_size = ale.getRAMSize()
-    ram = np.zeros((ram_size),dtype=np.uint8)
-    ale.getRAM(ram)
-
-
-    #Display ram bytes
-    font = pygame.font.SysFont("Ubuntu Mono",32)
-    text = font.render("RAM: " ,1,(255,208,208))
-    screen.blit(text,(330,10))
-
-    font = pygame.font.SysFont("Ubuntu Mono",25)
-    height = font.get_height()*1.2
-
-    line_pos = 40
-    ram_pos = 0
-    while(ram_pos < 128):
-        ram_string = ''.join(["%02X "%ram[x] for x in range(ram_pos,min(ram_pos+16,128))])
-        text = font.render(ram_string,1,(255,255,255))
-        screen.blit(text,(340,line_pos))
-        line_pos += height
-        ram_pos +=16
+    def displayInfo(self, screen, ram, a, total_reward):
+            font = pygame.font.SysFont("Ubuntu Mono",32)
+            text = font.render("RAM: " ,1,(255,208,208))
+            screen.blit(text,(330,10))
         
-    #display current action
-    font = pygame.font.SysFont("Ubuntu Mono",32)
-    text = font.render("Current Action: " + str(a) ,1,(208,208,255))
-    height = font.get_height()*1.2
-    screen.blit(text,(330,line_pos))
-    line_pos += height
+            font = pygame.font.SysFont("Ubuntu Mono",25)
+            height = font.get_height()*1.2
+        
+            line_pos = 40
+            ram_pos = 0
+            while(ram_pos < 128):
+                ram_string = ''.join(["%02X "%ram[x] for x in range(ram_pos,min(ram_pos+16,128))])
+                text = font.render(ram_string,1,(255,255,255))
+                screen.blit(text,(340,line_pos))
+                line_pos += height
+                ram_pos +=16
+                
+            #display current action
+            font = pygame.font.SysFont("Ubuntu Mono",32)
+            text = font.render("Current Action: " + str(a) ,1,(208,208,255))
+            height = font.get_height()*1.2
+            screen.blit(text,(330,line_pos))
+            line_pos += height
+        
+            #display reward
+            font = pygame.font.SysFont("Ubuntu Mono",30)
+            text = font.render("Total Reward: " + str(total_reward) ,1,(208,255,255))
+            screen.blit(text,(330,line_pos))
 
-    #display reward
-    font = pygame.font.SysFont("Ubuntu Mono",30)
-    text = font.render("Total Reward: " + str(total_reward) ,1,(208,255,255))
-    screen.blit(text,(330,line_pos))
+    def display(self, rgb, gray=False):
+        if (gray):
+            plt.imshow(rgb, cmap='gray')
+        else:
+            plt.imshow(rgb)
+        plt.show()
 
-    pygame.display.flip()
+    def getScreenPixels(self, ale, screen, game_surface):
+        numpy_surface = np.frombuffer(game_surface.get_buffer(),dtype=np.int32)
+        ale.getScreenRGB(numpy_surface)
+        #del numpy_surface
 
-    #process pygame event queue
-    exit=False
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            exit=True
-            break;
-    if(pressed[pygame.K_q]):
-        exit = True
-    if(exit):
-        break
+        screen.blit(pygame.transform.scale2x(game_surface),(0,0))
 
-    #delay to 60fps
-    clock.tick(60.)
+        data = numpy_surface.view(np.uint8).reshape(numpy_surface.shape + (4,))
+        rgba = np.reshape(data, (self.screen_height, self.screen_width, 4))
+        rgb = rgba[:, :, (2, 1, 0)]
+        resized = imresize(rgb, (110, 84, 3))
+        cropped = resized[26:110, :, :].astype(np.float) / 256        
+        #self.display(cropped)
+        
+        self.grayPixels = np.dot(cropped[...,:3], [0.299, 0.587, 0.114])        
+        #self.display(self.grayPixels, gray=True)
 
-    if(ale.game_over()):
-        episode_frame_number = ale.getEpisodeFrameNumber()
-        frame_number = ale.getFrameNumber()
-        print("Frame Number: " + str(frame_number) + " Episode Frame Number: " + str(episode_frame_number))
-        print("Episode " + str(episode) + " ended with score: " + str(total_reward))
-        ale.reset_game()
+        return self.grayPixels
+            
+    def checkExit(self, pressed): 
+        #process pygame event queue
+        exit=False
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                exit=True
+                break;
+        if(pressed[pygame.K_q]):
+            exit = True
+        return exit
+        
+    def gogo(self):
+        ale = ALEInterface()
+        
+        max_frames_per_episode = ale.getInt("max_num_frames_per_episode");
+        ale.set("random_seed",123)
+        
+        random_seed = ale.getInt("random_seed")
+        print("random_seed: " + str(random_seed))
+        
+        ale.loadROM(sys.argv[1])
+        legal_actions = ale.getMinimalActionSet()
+        print legal_actions
+        
+        (self.screen_width,self.screen_height) = ale.getScreenDims()
+        print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
+        
+        (display_width,display_height) = (1024,420)
+        
+        #init pygame
+        pygame.init()
+        screen = pygame.display.set_mode((display_width,display_height))
+        pygame.display.set_caption("Arcade Learning Environment Player Agent Display")
+        
+        game_surface = pygame.Surface((self.screen_width,self.screen_height))
+        
+        pygame.display.flip()
+        
+        #init clock
+        clock = pygame.time.Clock()
+        
+        episode = 0
         total_reward = 0.0 
-        episode = episode + 1
+        while(episode < 10):
+            a, pressed = self.getActionFromKeys()
 
+            reward = ale.act(a);
+            total_reward += reward
+        
+            #clear screen
+            screen.fill((0,0,0))
+        
+            #get atari screen pixels and blit them
+            pixels = self.getScreenPixels(ale, screen, game_surface)
+        
+            #get RAM
+            ram_size = ale.getRAMSize()
+            ram = np.zeros((ram_size),dtype=np.uint8)
+            ale.getRAM(ram)
+            
+            #Display info
+            self.displayInfo(screen, ram, a, total_reward)
+        
+            pygame.display.flip()
+        
+            if(self.checkExit(pressed)):
+                break
+        
+            #delay to 60fps
+            #clock.tick(60.)
+        
+            if(ale.game_over()):
+                episode_frame_number = ale.getEpisodeFrameNumber()
+                frame_number = ale.getFrameNumber()
+                print("Frame Number: " + str(frame_number) + " Episode Frame Number: " + str(episode_frame_number))
+                print("Episode " + str(episode) + " ended with score: " + str(total_reward))
+                ale.reset_game()
+                total_reward = 0.0 
+                episode = episode + 1
+        
+    
+if __name__ == '__main__':    
+    if(len(sys.argv) < 2):
+        print("Usage ./ale_python_test_pygame_player.py <ROM_FILE_NAME>")
+        sys.exit()
+    
+    DeepRLPlayer().gogo()
