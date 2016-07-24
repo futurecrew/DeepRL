@@ -104,9 +104,3 @@ layer {
     }
   }
 }
-layer {
-  name: "cls_prob"
-  type: "Softmax"
-  bottom: "cls_score"
-  top: "cls_prob"
-}

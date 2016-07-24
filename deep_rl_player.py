@@ -27,11 +27,14 @@ class DeepRLPlayer:
         self.greedyEpsilon = 1.0
         
         self.testModel = ModelRunner('test model',
-                                     prototxt = settings['PROTOTXT'])
+                                     prototxt = settings['PROTOTXT'],
+                                     )
         self.trainModel = ModelRunner('train model', 
                                       solver_prototxt = settings['TRAIN_MODEL'], 
                                       maxReplayMemory = settings['MAX_REPLAY_MEMORY'],
-                                      discountFactor = settings['DISCOUNT_FACTOR'],)
+                                      discountFactor = settings['DISCOUNT_FACTOR'],
+                                      maxActionNo = settings['MAX_ACTION_NO'],
+                                      )
         
 
     def displayInfo(self, screen, ram, a, total_reward):
@@ -118,9 +121,8 @@ class DeepRLPlayer:
             return random.randrange(0, settings['MAX_ACTION_NO'])
         else:
             actionValues = self.testModel.test(state)
-            
-            #return np.argmax(actionValues)
-            return 1
+            action = np.argmax(actionValues)
+            return action
     
         
     def gogo(self):
@@ -151,6 +153,8 @@ class DeepRLPlayer:
             pygame.display.flip()
         else:
             screen = None
+
+        self.trainModel.start()
         
         ram_size = ale.getRAMSize()
         ram = np.zeros((ram_size),dtype=np.uint8)
@@ -159,36 +163,43 @@ class DeepRLPlayer:
         episode = 0
         total_reward = 0.0 
         self.step = 0
+        action = 0
+        normReward = 0
         newState = None
         
         state = self.getScreenPixels(ale, screen, game_surface)
-        while(episode < 10):
-
+        while(episode < 1000000):
+            self.step +=1 
             if self.settings['USE_KEYBOARD']:
                 action, pressed = util.getActionFromKeys()
                 reward = ale.act(action);
             else:
-
-                if newState != None:
-                    self.trainModel.addData(state, action, reward, newState)
-                    self.trainModel.train()
-                    state = newState
-                    
-                action = self.getActionFromModel(state)
-                reward = ale.act(action);
+                if self.step % self.settings['SKIP_SCREEN'] != 0:
+                    reward = ale.act(action);
+                else:
+                    if newState != None:
+                        self.trainModel.addData(state, action, normReward, newState)
+                        state = newState
+                        
+                    action = self.getActionFromModel(state)
+                    reward = ale.act(action);
+    
+                    newState = self.getScreenPixels(ale, screen, game_surface)
+    
                 
-                if reward > 0:
-                    reward = 1
-                elif reward < 0:
-                    reward = -1
-
-                newState = self.getScreenPixels(ale, screen, game_surface)
-
+                    if self.step > 0 and self.step % self.settings['UPDATE_STEP'] == 0:
+                        self.testModel.copyFrom(self.trainModel)
+                
+    
+            if(ale.game_over()):
+                normReward = -1
             
-                if self.step > 0 and self.step % self.settings['UPDATE_STEP'] == 0:
-                    self.testModel.copy(self.trainModel)
-            
-            
+            if reward > 0:
+                normReward = 1
+            elif reward < 0:
+                normReward = -1
+            else:
+                normReward = 0
             
             ale.getRAM(ram)
             
@@ -199,7 +210,6 @@ class DeepRLPlayer:
             if(self.settings['USE_KEYBOARD'] and self.checkExit(pressed)):
                 break
         
-            self.step +=1 
             total_reward += reward
             
             #delay to 60fps
@@ -213,6 +223,8 @@ class DeepRLPlayer:
                 ale.reset_game()
                 total_reward = 0.0 
                 episode = episode + 1
+
+        self.trainModel.finishTrain()()
         
     
 if __name__ == '__main__':    
@@ -232,7 +244,8 @@ if __name__ == '__main__':
     settings['DISCOUNT_FACTOR'] = 0.9
     settings['LEARNING_RATE'] = 0.01
     settings['MAX_ACTION_NO'] = 18
-    settings['UPDATE_STEP'] = 100
+    settings['UPDATE_STEP'] = 1000
+    settings['SKIP_SCREEN'] = 4
     
     player = DeepRLPlayer(settings)
     player.gogo()

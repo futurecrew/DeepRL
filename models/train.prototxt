@@ -6,12 +6,11 @@ input_shape {
   dim: 84
   dim: 84
 }
-
 input: "labels"
 input_shape {
   dim: 1
+  dim: 18
 }
-
 layer {
   name: "conv1"
   type: "Convolution"
@@ -112,7 +111,7 @@ layer {
 }
 layer {
   name: "loss_cls"
-  type: "SoftmaxWithLoss"
+  type: "EuclideanLoss"
   bottom: "cls_score"
   bottom: "labels"
   top: "loss_cls"
