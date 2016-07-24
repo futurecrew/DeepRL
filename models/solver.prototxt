@@ -2,7 +2,7 @@ train_net: "models/train.prototxt"
 base_lr: 0.001
 lr_policy: "step"
 gamma: 0.1
-stepsize: 30000
+stepsize: 1000000
 display: 1000
 average_loss: 100
 momentum: 0.9

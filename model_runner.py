@@ -43,6 +43,7 @@ class ModelRunner(threading.Thread):
                 continue
             
             state, action, reward, newState = self.replayMemory[random.randint(0, len(self.replayMemory)-1)]
+            
             reshapedState = state.reshape((1, 1, state.shape[0], state.shape[1]))
             reshapedNewState = newState.reshape((1, 1, newState.shape[0], newState.shape[1]))
             label = np.zeros((1, self.maxActionNo), dtype=np.float32)
@@ -60,38 +61,23 @@ class ModelRunner(threading.Thread):
             
             if reward != 0:
                 print 'reward : %s' % reward
+                    
+                if action != 0:
+                    pass
             
-            self.solver.net.blobs['data'].data[...] = reshapedNewState.astype(np.float32, copy=False)
+            self.solver.net.blobs['data'].data[...] = reshapedState.astype(np.float32, copy=False)
             self.solver.net.blobs['labels'].data[...] = label
     
             self.solver.step(1)
-            
-            """         
-            self.solver.net.forward(data=reshapedState.astype(np.float32, copy=False),
-                                                   labels=label)
-            actionValues = self.solver.net.blobs['cls_score'].data
-            
-    
-            #self.solver.net.backward(diff=actionValues.astype(np.float32, copy=False))
-            self.solver.net.backward()
-            #self.solver.net.backward(**{'loss_cls': label})
-    
-            self.solver.net.forward(data=reshapedState.astype(np.float32, copy=False),
-                                                   labels=label)
-            
-            actionValues2 = self.solver.net.blobs['cls_score'].data
-            """
-            pass
 
         print 'ModelRunner thread finished.'
 
     def copyFrom(self, fromNet):
-        print ('Loading trained model '
-               'weights from {:s}').format(fromNet.name)
+        print ('Loading trained model weights from {:s}').format(fromNet.name)
         
         for param in self.net.params:
             for i in range(len(self.net.params[param])):
-                self.net.params[param][i].data[...] = fromNet.net.params[param][i].data
+                self.net.params[param][i].data[...] = fromNet.net.params[param][i].data.copy()
 
     def run(self):
         self.train()

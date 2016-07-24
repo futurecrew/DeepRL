@@ -115,7 +115,7 @@ class DeepRLPlayer:
         if self.step <= 10**6:
             # DJDJ
             #self.greedyEpsilon = 1.0 - 0.9 / 10**6 * self.step
-            self.greedyEpsilon = 0.1 
+            self.greedyEpsilon = 0.3 
 
         if random.random() < self.greedyEpsilon:
             return random.randrange(0, settings['MAX_ACTION_NO'])
@@ -224,7 +224,7 @@ class DeepRLPlayer:
                 total_reward = 0.0 
                 episode = episode + 1
 
-        self.trainModel.finishTrain()()
+        self.trainModel.finishTrain()
         
     
 if __name__ == '__main__':    
@@ -241,7 +241,7 @@ if __name__ == '__main__':
     settings['TRAIN_MODEL'] = 'models/solver.prototxt'
     settings['PROTOTXT'] = 'models/test.prototxt'
     settings['MAX_REPLAY_MEMORY'] = 10000
-    settings['DISCOUNT_FACTOR'] = 0.9
+    settings['DISCOUNT_FACTOR'] = 0.95
     settings['LEARNING_RATE'] = 0.01
     settings['MAX_ACTION_NO'] = 18
     settings['UPDATE_STEP'] = 1000
