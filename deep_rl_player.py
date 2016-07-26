@@ -17,23 +17,25 @@ import matplotlib.pyplot as plt
 from scipy.misc import imresize
 
 import util
+import multiprocessing
 from model_runner import ModelRunner
 
 class DeepRLPlayer:
     def __init__(self, settings):
         self.settings = settings
         self.grayPixels = np.zeros((84, 84), np.float)
-
+        self.sendQueue = multiprocessing.Queue()
+        self.receiveQueue = multiprocessing.Queue()
         self.greedyEpsilon = 1.0
         
-        self.testModel = ModelRunner('test model',
-                                     prototxt = settings['PROTOTXT'],
-                                     )
-        self.trainModel = ModelRunner('train model', 
-                                      solver_prototxt = settings['TRAIN_MODEL'], 
+        self.modelRunner = ModelRunner(
+                                      solver_prototxt = settings['TRAIN_MODEL'],
+                                      testPrototxt = settings['PROTOTXT'],
+                                      trainBatchSize = settings['TRAIN_BATCH_SIZE'],
                                       maxReplayMemory = settings['MAX_REPLAY_MEMORY'],
                                       discountFactor = settings['DISCOUNT_FACTOR'],
                                       maxActionNo = settings['MAX_ACTION_NO'],
+                                      updateStep = settings['UPDATE_STEP'],
                                       )
         
 
@@ -101,7 +103,6 @@ class DeepRLPlayer:
         return self.grayPixels
             
     def checkExit(self, pressed): 
-        #process pygame event queue
         exit=False
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -120,7 +121,9 @@ class DeepRLPlayer:
         if random.random() < self.greedyEpsilon:
             return random.randrange(0, settings['MAX_ACTION_NO'])
         else:
-            actionValues = self.testModel.test(state)
+            self.sendQueue.put(('test', state))
+            
+            actionValues = self.receiveQueue.get()
             action = np.argmax(actionValues)
             return action
     
@@ -141,7 +144,7 @@ class DeepRLPlayer:
         (self.screen_width,self.screen_height) = ale.getScreenDims()
         print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
         
-        (display_width,display_height) = (1024,420)
+        (display_width,display_height) = (1024, 420)
         
         pygame.init()
         game_surface = pygame.Surface((self.screen_width,self.screen_height))
@@ -154,7 +157,9 @@ class DeepRLPlayer:
         else:
             screen = None
 
-        self.trainModel.start()
+        p = multiprocessing.Process(target=self.modelRunner.runTrain, args=(self.sendQueue, self.receiveQueue,))
+        p.start()
+        
         
         ram_size = ale.getRAMSize()
         ram = np.zeros((ram_size),dtype=np.uint8)
@@ -165,6 +170,7 @@ class DeepRLPlayer:
         self.step = 0
         action = 0
         normReward = 0
+        gameOver = False
         newState = None
         
         state = self.getScreenPixels(ale, screen, game_surface)
@@ -178,7 +184,8 @@ class DeepRLPlayer:
                     reward = ale.act(action);
                 else:
                     if newState != None:
-                        self.trainModel.addData(state, action, normReward, newState)
+                        self.sendQueue.put(('addData', (state, action, normReward, newState, gameOver)))
+                        #print 'queue.put : addData'
                         state = newState
                         
                     action = self.getActionFromModel(state)
@@ -186,13 +193,11 @@ class DeepRLPlayer:
     
                     newState = self.getScreenPixels(ale, screen, game_surface)
     
-                
-                    if self.step > 0 and self.step % self.settings['UPDATE_STEP'] == 0:
-                        self.testModel.copyFrom(self.trainModel)
-                
     
             if(ale.game_over()):
-                normReward = -1
+                gameOver = True
+            else:
+                gameOver = False
             
             if reward > 0:
                 normReward = 1
@@ -224,8 +229,7 @@ class DeepRLPlayer:
                 total_reward = 0.0 
                 episode = episode + 1
 
-        self.trainModel.finishTrain()
-        
+        self.sendQueue.put(('finish', ''))        
     
 if __name__ == '__main__':    
     if(len(sys.argv) < 2):
@@ -240,11 +244,12 @@ if __name__ == '__main__':
 
     settings['TRAIN_MODEL'] = 'models/solver.prototxt'
     settings['PROTOTXT'] = 'models/test.prototxt'
+    settings['TRAIN_BATCH_SIZE'] = 100
     settings['MAX_REPLAY_MEMORY'] = 10000
     settings['DISCOUNT_FACTOR'] = 0.95
     settings['LEARNING_RATE'] = 0.01
     settings['MAX_ACTION_NO'] = 18
-    settings['UPDATE_STEP'] = 1000
+    settings['UPDATE_STEP'] = 100
     settings['SKIP_SCREEN'] = 4
     
     player = DeepRLPlayer(settings)

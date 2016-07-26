@@ -1,14 +1,14 @@
 name: "DQN"
 input: "data"
 input_shape {
-  dim: 1
+  dim: 100
   dim: 1
   dim: 84
   dim: 84
 }
 input: "labels"
 input_shape {
-  dim: 1
+  dim: 100
   dim: 18
 }
 layer {
