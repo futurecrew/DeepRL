@@ -13,29 +13,29 @@ from ale_python_interface import ALEInterface
 import numpy as np
 import random
 import pygame
+import multiprocessing
 import matplotlib.pyplot as plt
 from scipy.misc import imresize
 
 import util
-import multiprocessing
 from model_runner import ModelRunner
 
 class DeepRLPlayer:
     def __init__(self, settings):
         self.settings = settings
         self.grayPixels = np.zeros((84, 84), np.float)
-        self.sendQueue = multiprocessing.Queue()
-        self.receiveQueue = multiprocessing.Queue()
+
         self.greedyEpsilon = 1.0
+        self.sendQueue = multiprocessing.Queue()
         
-        self.modelRunner = ModelRunner(
-                                      solver_prototxt = settings['TRAIN_MODEL'],
-                                      testPrototxt = settings['PROTOTXT'],
+        self.modelRunner = ModelRunner(self.sendQueue, 
                                       trainBatchSize = settings['TRAIN_BATCH_SIZE'],
+                                      solverPrototxt = settings['SOLVER_PROTOTXT'], 
+                                      testPrototxt = settings['TEST_PROTOTXT'],
                                       maxReplayMemory = settings['MAX_REPLAY_MEMORY'],
                                       discountFactor = settings['DISCOUNT_FACTOR'],
-                                      maxActionNo = settings['MAX_ACTION_NO'],
                                       updateStep = settings['UPDATE_STEP'],
+                                      maxActionNo = settings['MAX_ACTION_NO'],
                                       )
         
 
@@ -103,6 +103,7 @@ class DeepRLPlayer:
         return self.grayPixels
             
     def checkExit(self, pressed): 
+        #process pygame event queue
         exit=False
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
@@ -113,17 +114,19 @@ class DeepRLPlayer:
         return exit
         
     def getActionFromModel(self, state):
-        if self.step <= 10**6:
-            # DJDJ
-            #self.greedyEpsilon = 1.0 - 0.9 / 10**6 * self.step
-            self.greedyEpsilon = 0.3 
+        
+        # DJDJ
+        #if self.step <= 10**6:
+        #    self.greedyEpsilon = 1.0 - 0.9 / 10**6 * self.step
+
+        if self.step <= 3 * 10**5:
+            self.greedyEpsilon = 1.0 - 0.9 / (3 * 10**5) * self.step
+            #self.greedyEpsilon = 0.3 
 
         if random.random() < self.greedyEpsilon:
             return random.randrange(0, settings['MAX_ACTION_NO'])
         else:
-            self.sendQueue.put(('test', state))
-            
-            actionValues = self.receiveQueue.get()
+            actionValues = self.modelRunner.test(state)
             action = np.argmax(actionValues)
             return action
     
@@ -144,7 +147,7 @@ class DeepRLPlayer:
         (self.screen_width,self.screen_height) = ale.getScreenDims()
         print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
         
-        (display_width,display_height) = (1024, 420)
+        (display_width,display_height) = (1024,420)
         
         pygame.init()
         game_surface = pygame.Surface((self.screen_width,self.screen_height))
@@ -157,10 +160,6 @@ class DeepRLPlayer:
         else:
             screen = None
 
-        p = multiprocessing.Process(target=self.modelRunner.runTrain, args=(self.sendQueue, self.receiveQueue,))
-        p.start()
-        
-        
         ram_size = ale.getRAMSize()
         ram = np.zeros((ram_size),dtype=np.uint8)
         clock = pygame.time.Clock()
@@ -170,7 +169,6 @@ class DeepRLPlayer:
         self.step = 0
         action = 0
         normReward = 0
-        gameOver = False
         newState = None
         
         state = self.getScreenPixels(ale, screen, game_surface)
@@ -184,27 +182,20 @@ class DeepRLPlayer:
                     reward = ale.act(action);
                 else:
                     if newState != None:
-                        self.sendQueue.put(('addData', (state, action, normReward, newState, gameOver)))
-                        #print 'queue.put : addData'
+                        self.modelRunner.addData(state, action, normReward, newState)
                         state = newState
+                        
+                        normReward = 0
                         
                     action = self.getActionFromModel(state)
                     reward = ale.act(action);
     
                     newState = self.getScreenPixels(ale, screen, game_surface)
     
-    
-            if(ale.game_over()):
-                gameOver = True
-            else:
-                gameOver = False
-            
             if reward > 0:
-                normReward = 1
+                normReward += 1
             elif reward < 0:
-                normReward = -1
-            else:
-                normReward = 0
+                normReward -= 1
             
             ale.getRAM(ram)
             
@@ -229,7 +220,8 @@ class DeepRLPlayer:
                 total_reward = 0.0 
                 episode = episode + 1
 
-        self.sendQueue.put(('finish', ''))        
+        self.modelRunner.finishTrain()
+        
     
 if __name__ == '__main__':    
     if(len(sys.argv) < 2):
@@ -242,14 +234,14 @@ if __name__ == '__main__':
     #settings['SHOW_SCREEN'] = False
     settings['USE_KEYBOARD'] = False
 
-    settings['TRAIN_MODEL'] = 'models/solver.prototxt'
-    settings['PROTOTXT'] = 'models/test.prototxt'
+    settings['SOLVER_PROTOTXT'] = 'models/solver.prototxt'
+    settings['TEST_PROTOTXT'] = 'models/test.prototxt'
     settings['TRAIN_BATCH_SIZE'] = 100
-    settings['MAX_REPLAY_MEMORY'] = 10000
-    settings['DISCOUNT_FACTOR'] = 0.95
+    settings['MAX_REPLAY_MEMORY'] = 1000000
+    settings['DISCOUNT_FACTOR'] = 0.99
     settings['LEARNING_RATE'] = 0.01
     settings['MAX_ACTION_NO'] = 18
-    settings['UPDATE_STEP'] = 100
+    settings['UPDATE_STEP'] = 10000
     settings['SKIP_SCREEN'] = 4
     
     player = DeepRLPlayer(settings)
