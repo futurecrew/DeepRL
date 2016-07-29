@@ -2,14 +2,14 @@ name: "DQN"
 input: "data"
 input_shape {
   dim: 100
-  dim: 1
+  dim: 4
   dim: 84
   dim: 84
 }
 input: "labels"
 input_shape {
   dim: 100
-  dim: 18
+  dim: 4
 }
 layer {
   name: "conv1"
@@ -98,7 +98,7 @@ layer {
     decay_mult: 0
   }
   inner_product_param {
-    num_output: 18
+    num_output: 4
     weight_filler {
       type: "gaussian"
       std: 0.01

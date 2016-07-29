@@ -28,16 +28,6 @@ class DeepRLPlayer:
         self.greedyEpsilon = 1.0
         self.sendQueue = multiprocessing.Queue()
         
-        self.modelRunner = ModelRunner(self.sendQueue, 
-                                      trainBatchSize = settings['TRAIN_BATCH_SIZE'],
-                                      solverPrototxt = settings['SOLVER_PROTOTXT'], 
-                                      testPrototxt = settings['TEST_PROTOTXT'],
-                                      maxReplayMemory = settings['MAX_REPLAY_MEMORY'],
-                                      discountFactor = settings['DISCOUNT_FACTOR'],
-                                      updateStep = settings['UPDATE_STEP'],
-                                      maxActionNo = settings['MAX_ACTION_NO'],
-                                      )
-        
 
     def displayInfo(self, screen, ram, a, total_reward):
             font = pygame.font.SysFont("Ubuntu Mono",32)
@@ -97,7 +87,8 @@ class DeepRLPlayer:
         #if self.step > 200:        
         #    self.display(cropped)
         
-        self.grayPixels = np.dot(cropped[...,:3], [0.299, 0.587, 0.114])        
+        #self.grayPixels = np.dot(cropped[...,:3], [0.299, 0.587, 0.114])
+        self.grayPixels = np.dot(cropped[...,:3], [29.9, 58.7, 11.4]).astype(np.uint8)
         #self.display(self.grayPixels, gray=True)
 
         return self.grayPixels
@@ -113,20 +104,20 @@ class DeepRLPlayer:
             exit = True
         return exit
         
-    def getActionFromModel(self, state):
+    def getActionFromModel(self, stateHistory):
         
         # DJDJ
         #if self.step <= 10**6:
         #    self.greedyEpsilon = 1.0 - 0.9 / 10**6 * self.step
 
-        if self.step <= 3 * 10**5:
-            self.greedyEpsilon = 1.0 - 0.9 / (3 * 10**5) * self.step
-            #self.greedyEpsilon = 0.3 
+        if self.step <= 4 * 10**5:
+            #self.greedyEpsilon = 1.0 - 0.9 / (4 * 10**5) * self.step
+            self.greedyEpsilon = 0.2 
 
         if random.random() < self.greedyEpsilon:
-            return random.randrange(0, settings['MAX_ACTION_NO'])
+            return random.randrange(0, len(self.legalActions))
         else:
-            actionValues = self.modelRunner.test(state)
+            actionValues = self.modelRunner.test(stateHistory)
             action = np.argmax(actionValues)
             return action
     
@@ -141,13 +132,24 @@ class DeepRLPlayer:
         print("random_seed: " + str(random_seed))
         
         ale.loadROM(sys.argv[1])
-        legal_actions = ale.getMinimalActionSet()
-        print legal_actions
+        self.legalActions = ale.getMinimalActionSet()
+        print self.legalActions
         
         (self.screen_width,self.screen_height) = ale.getScreenDims()
         print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
         
         (display_width,display_height) = (1024,420)
+        
+
+        self.modelRunner = ModelRunner(self.sendQueue, 
+                                      trainBatchSize = settings['TRAIN_BATCH_SIZE'],
+                                      solverPrototxt = settings['SOLVER_PROTOTXT'], 
+                                      testPrototxt = settings['TEST_PROTOTXT'],
+                                      maxReplayMemory = settings['MAX_REPLAY_MEMORY'],
+                                      discountFactor = settings['DISCOUNT_FACTOR'],
+                                      updateStep = settings['UPDATE_STEP'],
+                                      maxActionNo = len(self.legalActions),
+                                      )
         
         pygame.init()
         game_surface = pygame.Surface((self.screen_width,self.screen_height))
@@ -168,34 +170,51 @@ class DeepRLPlayer:
         total_reward = 0.0 
         self.step = 0
         action = 0
-        normReward = 0
+        actionIndex = 0
+        rewardSum = 0
         newState = None
+        stateHistory = []
+        newStateHistory = []
         
         state = self.getScreenPixels(ale, screen, game_surface)
+        
         while(episode < 1000000):
-            self.step +=1 
-            if self.settings['USE_KEYBOARD']:
-                action, pressed = util.getActionFromKeys()
+            if self.step % self.settings['SKIP_SCREEN'] != 0:
                 reward = ale.act(action);
             else:
-                if self.step % self.settings['SKIP_SCREEN'] != 0:
-                    reward = ale.act(action);
+                if len(stateHistory) == 4:
+                    stateHistoryStack = np.reshape(stateHistory, (4, 84, 84))
+                    actionIndex = self.getActionFromModel(stateHistoryStack)
+                    action = self.legalActions[actionIndex]
                 else:
-                    if newState != None:
-                        self.modelRunner.addData(state, action, normReward, newState)
-                        state = newState
+                    action = 0
+                    
+                reward = ale.act(action);
+
+                newState = self.getScreenPixels(ale, screen, game_surface)
+                    
+                if len(stateHistory) == 4:
+                    del stateHistory[0]
+                stateHistory.append(state)
+                
+                if len(newStateHistory) == 4:
+                    del newStateHistory[0]
+                newStateHistory.append(newState)
+
+                if len(stateHistory) == 4 and len(newStateHistory) == 4:
+                    stateHistoryStack = np.reshape(stateHistory, (4, 84, 84))
+                    newStateHistoryStack = np.reshape(newStateHistory, (4, 84, 84))
+
+                    self.modelRunner.addData(stateHistoryStack, actionIndex, rewardSum, newStateHistoryStack)
+                    rewardSum = 0
+
+                state = newState                   
+
                         
-                        normReward = 0
-                        
-                    action = self.getActionFromModel(state)
-                    reward = ale.act(action);
-    
-                    newState = self.getScreenPixels(ale, screen, game_surface)
-    
             if reward > 0:
-                normReward += 1
+                rewardSum += 1
             elif reward < 0:
-                normReward -= 1
+                rewardSum -= 1
             
             ale.getRAM(ram)
             
@@ -211,6 +230,22 @@ class DeepRLPlayer:
             #delay to 60fps
             #clock.tick(60.)
         
+            self.step +=1 
+        
+            # DJDJ
+            if self.step % 400 == 0:
+                print 'hard reset. total_reward : %s' % total_reward
+                total_reward = 0.0 
+                actionIndex = 0
+                rewardSum = 0
+                newState = None
+                stateHistory = []
+                newStateHistory = []
+                
+                state = self.getScreenPixels(ale, screen, game_surface)
+                ale.loadROM(sys.argv[1])
+                
+                
             if(ale.game_over()):
                 episode_frame_number = ale.getEpisodeFrameNumber()
                 frame_number = ale.getFrameNumber()
@@ -219,6 +254,15 @@ class DeepRLPlayer:
                 ale.reset_game()
                 total_reward = 0.0 
                 episode = episode + 1
+
+                actionIndex = 0
+                rewardSum = 0
+                newState = None
+                stateHistory = []
+                newStateHistory = []
+                
+                state = self.getScreenPixels(ale, screen, game_surface)
+                
 
         self.modelRunner.finishTrain()
         
@@ -237,11 +281,9 @@ if __name__ == '__main__':
     settings['SOLVER_PROTOTXT'] = 'models/solver.prototxt'
     settings['TEST_PROTOTXT'] = 'models/test.prototxt'
     settings['TRAIN_BATCH_SIZE'] = 100
-    settings['MAX_REPLAY_MEMORY'] = 1000000
+    settings['MAX_REPLAY_MEMORY'] = 200000
     settings['DISCOUNT_FACTOR'] = 0.99
-    settings['LEARNING_RATE'] = 0.01
-    settings['MAX_ACTION_NO'] = 18
-    settings['UPDATE_STEP'] = 10000
+    settings['UPDATE_STEP'] = 1000
     settings['SKIP_SCREEN'] = 4
     
     player = DeepRLPlayer(settings)
