@@ -7,7 +7,7 @@ class NetTester():
         
         self.trainBatchSize = 10
         
-        #caffe.set_mode_gpu()
+        caffe.set_mode_gpu()
         
         self.solver = caffe.SGDSolver('models/test/solver_test5.prototxt')
         self.trainNet = self.solver.net
