@@ -42,7 +42,7 @@ class NetTester():
         self.addData(data1, 2, 0, data3, False, 1)
         self.addData(data2, 2, 1, data3, False, 2)
         self.addData(data3, 2, 0, data4, True, 3)
-        self.addData(data3, 1, 0, data4, True, 3)
+        #self.addData(data3, 1, 0, data4, True, 3)
         
         self.train()
         
@@ -68,7 +68,7 @@ class NetTester():
             label = self.solver.net.blobs['cls_score'].data.copy()
             
             if trainGameOver:
-                label[0, trainAction] = trainReward
+                label[0, trainAction] = trainReward 
             else:
                 label[0, trainAction] = trainReward + 0.99 * np.max(newActionValues[0])
 

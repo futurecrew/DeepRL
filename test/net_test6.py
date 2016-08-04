@@ -1,16 +1,15 @@
 import caffe
 import numpy as np
 import random
-import time
 
 class NetTester():
     def __init__(self):
         
-        self.trainBatchSize = 10
+        self.trainBatchSize = 1
         
         caffe.set_mode_gpu()
         
-        self.solver = caffe.SGDSolver('models/test/solver_test5.prototxt')
+        self.solver = caffe.SGDSolver('models/test/solver_test6.prototxt')
         self.trainNet = self.solver.net
         self.replayMemory = []            
         self.running = True
@@ -43,36 +42,22 @@ class NetTester():
         self.addData(data1, 2, 0, data3, False, 1)
         self.addData(data2, 2, 1, data3, False, 2)
         self.addData(data3, 2, 0, data4, True, 3)
-        self.addData(data3, 1, 0, data4, True, 3)
+        #self.addData(data3, 1, 0, data4, True, 3)
         
         self.train()
         
     def train(self):
-        stepNo = 0
-        
         while self.running:
-            startTime = time.time()
+            trainState = np.zeros((1, 1, 84, 84), dtype=np.float32)
+            trainNewState = np.zeros((1, 1, 84, 84), dtype=np.float32)
             
-            for i in range(0, self.trainBatchSize):
-                stateHistoryStack, actionIndex, reward, newStateHistoryStack, gameOver, episodeStep \
-                    = self.replayMemory[random.randint(0, len(self.replayMemory)-1)]
+            stateHistoryStack, trainAction, trainReward, newStateHistoryStack, trainGameOver, episodeStep \
+                = self.replayMemory[random.randint(0, len(self.replayMemory)-1)]
                     
-                if i == 0:
-                    trainState = np.zeros((self.trainBatchSize, 1, 84, 84), dtype=np.float32)
-                    trainNewState = np.zeros((self.trainBatchSize, 1, 84, 84), dtype=np.float32)
-                    trainAction = []
-                    trainReward = []
-                    trainGameOver = []
-                    steps = []
-                 
-                trainState[i, 0, :, :] = stateHistoryStack
-                trainNewState[i, 0, :, :] = newStateHistoryStack
-                trainAction.append(actionIndex)
-                trainReward.append(reward)
-                trainGameOver.append(gameOver)
-                steps.append(episodeStep)
+            trainState[0, :, :, :] = stateHistoryStack
+            trainNewState[0, :, :, :] = newStateHistoryStack
 
-            label = np.zeros((self.trainBatchSize, 4), dtype=np.float32)
+            label = np.zeros((1, 4), dtype=np.float32)
                 
             self.solver.net.forward(data=trainNewState.astype(np.float32, copy=False),
                                                       labels=label)
@@ -82,28 +67,23 @@ class NetTester():
                                                       labels=label)
             label = self.solver.net.blobs['cls_score'].data.copy()
             
-            for i in range(0, self.trainBatchSize):
-                if trainGameOver[i]:
-                    label[i, trainAction[i]] = trainReward[i]
-                else:
-                    label[i, trainAction[i]] = trainReward[i] + 0.99 * np.max(newActionValues[i])
+            if trainGameOver:
+                label[0, trainAction] = trainReward 
+            else:
+                label[0, trainAction] = trainReward + 0.99 * np.max(newActionValues[0])
 
             self.solver.net.blobs['data'].data[...] = trainState.astype(np.float32, copy=False)
             self.solver.net.blobs['labels'].data[...] = label
-    
+        
             self.solver.step(1)
 
             self.solver.net.forward(data=trainState.astype(np.float32, copy=False),
                                                       labels=label)
             classScore2 = self.solver.net.blobs['cls_score'].data.copy()
 
-            stepNo += 1
-            
-            print 'stepNo : %s' % stepNo
-            print 'elapsed : %.5f' % (time.time() - startTime)
-            print 'step   : %s' % steps[0]
-            print 'label  : %s' % label[0]
-            print 'score : %s' % classScore2[0]
+            print 'step   : %s' % episodeStep
+            print 'label  : %s' % label
+            print 'score : %s' % classScore2
 
                             
         print 'ModelRunner thread finished.'
