@@ -7,101 +7,69 @@ import threading
 import multiprocessing
 
 class ModelRunner():
-    def __init__(self, queueFromGame, 
-                 trainBatchSize, solverPrototxt, testPrototxt, 
-                 maxReplayMemory, discountFactor,
-                 updateStep, maxActionNo,
-                 caffemodel = None):
-        
-        self.trainBatchSize = trainBatchSize
-        self.discountFactor = discountFactor
-        self.updateStep = updateStep
-        self.maxReplayMemory = maxReplayMemory
+    def __init__(self, settings,  maxActionNo, replayMemory, caffemodel = None):
+        self.trainBatchSize = settings['TRAIN_BATCH_SIZE']
+        self.discountFactor = settings['DISCOUNT_FACTOR']
+        self.updateStep = settings['UPDATE_STEP']
+        self.maxReplayMemory = settings['MAX_REPLAY_MEMORY']
         
         caffe.set_mode_gpu()
         
         # Train
-        self.solver = caffe.SGDSolver(solverPrototxt)
+        self.solver = caffe.SGDSolver(settings['SOLVER_PROTOTXT'])
         self.trainNet = self.solver.net
         self.maxActionNo = maxActionNo
         
         # Test
-        #self.testNet = caffe.Net(testPrototxt, caffemodel, caffe.TEST)
-        self.testNet = caffe.Net(testPrototxt, caffe.TEST)
+        if caffemodel != None:
+            self.targetNet = caffe.Net(settings['TARGET_PROTOTXT'], caffemodel, caffe.TEST)
+        else:
+            self.targetNet = caffe.Net(settings['TARGET_PROTOTXT'], caffe.TEST)
 
-        self.replayMemory = []            
+        self.replayMemory = replayMemory
         self.running = True
         self.step = 0
+        self.blankLabel = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
 
         # DJDJ
         #thread.start_new_thread(self.train, ())
 
-        self.dataIndex = 2 
-
-    def addData(self, stateHistory, action, reward, newStateHistory, gameOver, episodeStep):
-        if len(self.replayMemory) > self.maxReplayMemory:
-            del self.replayMemory[0]
-        
-        self.replayMemory.append((stateHistory, action, reward, newStateHistory, gameOver, episodeStep))
-            
-    def test(self, stateHistoryStack):
-        reshapedData = stateHistoryStack.reshape((1, 4, 84, 84))
-        blobs_out = self.testNet.forward(data=reshapedData.astype(np.float32, copy=False))            
-        return blobs_out['cls_score']
+    def predict(self, historyBuffer):
+        self.trainNet.forward(
+                              data = historyBuffer.astype(np.float32, copy=False),
+                              labels = self.blankLabel)
+        return self.trainNet.blobs['cls_score'].data[0]            
 
     def train(self):
-        #if len(self.replayMemory) <= 50000:
-        if len(self.replayMemory) % 1000 == 0:
-            print '-- len(self.replayMemory) : %s' % len(self.replayMemory)
-
-        if len(self.replayMemory) <= 1000000:
+        if self.replayMemory.count <= 50000:
+        #if self.replayMemory.count <= 500:
             return
-                        
-        for i in range(0, self.trainBatchSize):
-            stateHistory, actionIndex, reward, newStateHistory, gameOver, episodeStep \
-                = self.replayMemory[random.randint(0, len(self.replayMemory)-1)]
-            
-            stateHistoryStack = np.reshape(stateHistory, (4, 84, 84))    
-            newStateHistoryStack = np.reshape(newStateHistory, (4, 84, 84))    
-
-            if i == 0:
-                trainState = np.zeros((self.trainBatchSize, 4, 84, 84), dtype=np.float32)
-                trainNewState = np.zeros((self.trainBatchSize, 4, 84, 84), dtype=np.float32)
-                trainAction = []
-                trainReward = []
-                trainGameOver = []
-                steps = []
-             
-            trainState[i, :, :, :] = stateHistoryStack
-            trainNewState[i, :, :, :] = newStateHistoryStack
-            trainAction.append(actionIndex)
-            trainReward.append(reward)
-            trainGameOver.append(gameOver)
-            steps.append(episodeStep)
-
+        
+        prestates, actions, rewards, poststates, gameOvers = self.replayMemory.getMinibatch()
+        
+        # Get Q*(s, a)
+        self.targetNet.forward(data=poststates.astype(np.float32, copy=False))
+        newActionValues = self.targetNet.blobs['cls_score'].data.copy()
+        
+        # Get Q(s, a)
         label = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
-            
-        self.solver.net.forward(data=trainNewState.astype(np.float32, copy=False),
+        self.trainNet.forward(data=prestates.astype(np.float32, copy=False),
                                                   labels=label)
-        newActionValues = self.solver.net.blobs['cls_score'].data.copy()
-            
-        self.solver.net.forward(data=trainState.astype(np.float32, copy=False),
-                                                  labels=label)
-        label = self.solver.net.blobs['cls_score'].data.copy()
+        label = self.trainNet.blobs['cls_score'].data.copy()
         
         for i in range(0, self.trainBatchSize):
-            if trainGameOver[i]:
-                label[i, trainAction[i]] = trainReward[i]
+            if gameOvers[i]:
+                label[i, actions[i]] = rewards[i]
             else:
-                label[i, trainAction[i]] = trainReward[i] + self.discountFactor* np.max(newActionValues[i])
+                label[i, actions[i]] = rewards[i] + self.discountFactor* np.max(newActionValues[i])
 
-        self.solver.net.blobs['data'].data[...] = trainState.astype(np.float32, copy=False)
-        self.solver.net.blobs['labels'].data[...] = label
+        self.trainNet.blobs['data'].data[...] = prestates.astype(np.float32, copy=False)
+        self.trainNet.blobs['labels'].data[...] = label
 
         self.solver.step(1)
 
         """
-        classScore = self.solver.net.blobs['cls_score'].data.copy()
+        classScore = self.trainNet.blobs['cls_score'].data.copy()
 
         if trainGameOver[0]:
             print 'game over'
@@ -110,7 +78,7 @@ class ModelRunner():
         """
         
         """
-        self.solver.net.forward(data=trainState.astype(np.float32, copy=False),
+        self.trainNet.forward(data=trainState.astype(np.float32, copy=False),
                                                   labels=label)
 
         diff = classScore - label
@@ -127,10 +95,10 @@ class ModelRunner():
         #print 'ModelRunner thread finished.'
 
     def updateModel(self):
-        for param in self.testNet.params:
-            for i in range(len(self.testNet.params[param])):
-                self.testNet.params[param][i].data[...] = self.trainNet.params[param][i].data.copy()
-        print ('Updated test model')
+        for param in self.targetNet.params:
+            for i in range(len(self.targetNet.params[param])):
+                self.targetNet.params[param][i].data[...] = self.trainNet.params[param][i].data.copy()
+        print ('Updated target model')
 
     def finishTrain(self):
         self.running = False

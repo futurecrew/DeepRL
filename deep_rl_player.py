@@ -14,6 +14,7 @@ import numpy as np
 import random
 import pygame
 import multiprocessing
+import cv2
 import matplotlib.pyplot as plt
 from scipy.misc import imresize
 import pickle
@@ -21,6 +22,7 @@ import threading
 import time
 import util
 from model_runner import ModelRunner
+from replay_memory import ReplayMemory
 
 class DeepRLPlayer:
     def __init__(self, settings):
@@ -32,8 +34,10 @@ class DeepRLPlayer:
 
         self.greedyEpsilon = 1.0
         self.sendQueue = multiprocessing.Queue()
-        
-        DebugInput(self).start()
+
+        self.replayMemory = ReplayMemory(self.settings['MAX_REPLAY_MEMORY'], self.settings)
+        # DJDJ        
+        #DebugInput(self).start()
         
 
     def displayInfo(self, screen, ram, a, total_reward):
@@ -72,6 +76,7 @@ class DeepRLPlayer:
             plt.imshow(rgb)
         plt.show()
 
+    """
     def getScreenPixels(self, ale, screen, game_surface):
         
         numpy_surface = np.frombuffer(game_surface.get_buffer(),dtype=np.int32)
@@ -96,7 +101,13 @@ class DeepRLPlayer:
         #self.display(self.grayPixels, gray=True)
 
         return self.grayPixels
+    """
             
+    def getScreenPixels(self, ale):
+        grayScreen = ale.getScreenGrayscale()
+        resized = cv2.resize(grayScreen, (84, 84))
+        return resized
+    
     def checkExit(self, pressed): 
         #process pygame event queue
         exit=False
@@ -108,32 +119,37 @@ class DeepRLPlayer:
             exit = True
         return exit
         
-    def getActionFromModel(self, stateHistoryStack, totalStep):
-        
-        # DJDJ
+    def getActionFromModel(self, historyBuffer, totalStep):
         if totalStep <= 10**6:
             self.greedyEpsilon = 1.0 - 0.9 / 10**6 * totalStep
-
-        #if totalStep <= 4 * 10**5:
-        #    self.greedyEpsilon = 1.0 - 0.9 / (4 * 10**5) * totalStep
 
         if random.random() < self.greedyEpsilon:
             return random.randrange(0, len(self.legalActions))
         else:
-            actionValues = self.modelRunner.test(stateHistoryStack)
+            actionValues = self.modelRunner.predict(historyBuffer)
             actionIndex = np.argmax(actionValues)
             return actionIndex
     
+    def clipReward(self, reward):
+            if reward > 0:
+                return 1
+            elif reward < 0:
+                return -1
+            else:
+                return 0
         
     def gogo(self):
         ale = ALEInterface()
         
         max_frames_per_episode = ale.getInt("max_num_frames_per_episode");
-        ale.set("random_seed",123)
+        ale.setInt("random_seed",123)
         
         random_seed = ale.getInt("random_seed")
         print("random_seed: " + str(random_seed))
-        
+
+        if self.settings['SHOW_SCREEN']:
+            ale.setBool('display_screen', True)
+            
         ale.loadROM(sys.argv[1])
         self.legalActions = ale.getMinimalActionSet()
         print self.legalActions
@@ -144,155 +160,76 @@ class DeepRLPlayer:
         (display_width,display_height) = (1024,420)
         
 
-        self.modelRunner = ModelRunner(self.sendQueue, 
-                                      trainBatchSize = settings['TRAIN_BATCH_SIZE'],
-                                      solverPrototxt = settings['SOLVER_PROTOTXT'], 
-                                      testPrototxt = settings['TEST_PROTOTXT'],
-                                      maxReplayMemory = settings['MAX_REPLAY_MEMORY'],
-                                      discountFactor = settings['DISCOUNT_FACTOR'],
-                                      updateStep = settings['UPDATE_STEP'],
-                                      maxActionNo = len(self.legalActions),
-                                      )
+        self.modelRunner = ModelRunner(
+                                    self.settings, 
+                                    maxActionNo = len(self.legalActions),
+                                    replayMemory = self.replayMemory
+                                    )
         
-        pygame.init()
-        game_surface = pygame.Surface((self.screen_width,self.screen_height))
-
-        if self.settings['SHOW_SCREEN']:
-            screen = pygame.display.set_mode((display_width,display_height))
-            pygame.display.set_caption("Arcade Learning Environment Player Agent Display")
-            
-            pygame.display.flip()
-        else:
-            screen = None
-
         ram_size = ale.getRAMSize()
         ram = np.zeros((ram_size),dtype=np.uint8)
-        clock = pygame.time.Clock()
+        action = 0
         
-        episode = 0
-        
-        while (episode < 1000000):
-            gameOver = False
-            total_reward = 0.0 
-            action = 0
-            actionIndex = 0
-            rewardSum = 0
-            newState = None
-            stateHistory = []
-            newStateHistory = []
-            pickleNo = 0
-            
+        for epoch in range(1, self.settings['MAX_EPOCH'] + 1):
+            epochTotalReward = 0
+            episodeTotalReward = 0
+            epochStartTime = time.time()
             episodeStartTime = time.time()
-            
-            state = self.getScreenPixels(ale, screen, game_surface)
-
-            while gameOver == False:            
+            ale.reset_game()
+            episode = 1
+            rewardSum = 0
+            historyBuffer = np.zeros((settings['TRAIN_BATCH_SIZE'], 
+                                      settings['SCREEN_HISTORY'],
+                                      settings['SCREEN_HEIGHT'], 
+                                      settings['SCREEN_WIDTH']))
+             
+            for stepNo in range(self.settings['EPOCH_STEP']):
                 episodeStep = ale.getEpisodeFrameNumber()
                 totalStep = ale.getFrameNumber()
 
-                if episodeStep % self.settings['SKIP_SCREEN'] != 0:
-                    reward = ale.act(action);
-                else:
-                    if len(stateHistory) == 4:
-                        stateHistoryStack = np.reshape(stateHistory, (4, 84, 84))
-                        actionIndex = self.getActionFromModel(stateHistoryStack, totalStep)
-                        action = self.legalActions[actionIndex]
-                    else:
-                        action = 0
-                        
-                    reward = ale.act(action);
-    
-                    newState = self.getScreenPixels(ale, screen, game_surface)
-                        
-                    if len(stateHistory) == 4:
-                        del stateHistory[0]
-                    stateHistory.append(state)
+                actionIndex = self.getActionFromModel(historyBuffer, totalStep)
+                action = self.legalActions[actionIndex]
                     
-                    if len(newStateHistory) == 4:
-                        del newStateHistory[0]
-                    newStateHistory.append(newState)
-    
-    
-                    """
-                    if len(stateHistory) == 4 and len(newStateHistory) == 4:
-                        stateHistoryStack = np.reshape(stateHistory, (4, 84, 84))
-                        newStateHistoryStack = np.reshape(newStateHistory, (4, 84, 84))
-    
-                        # DJDJ
-                        pickleNo += 1
-                        if pickleNo == 1:
-                            actionIndex = 3
-                            rewardSum = 0
-                            gameOver = False
-                        elif pickleNo ==2:
-                            actionIndex = 0
-                            rewardSum = 1
-                            gameOver = False
-                        elif pickleNo == 3:
-                            actionIndex = 3
-                            rewardSum = 0
-                            gameOver = True
-                        
-                        self.modelRunner.addData(stateHistoryStack, actionIndex, rewardSum, newStateHistoryStack, gameOver, episodeStep)
-                        rewardSum = 0
-                        
-                        if pickleNo == 3:
-                            self.modelRunner.train()
-                            self.modelRunner.train()
-                            self.modelRunner.train()
-                            self.modelRunner.train()
-                            self.modelRunner.train()
-                            self.modelRunner.train()
-                            self.modelRunner.train()
-                            self.modelRunner.train()
-                    """                
-                    if len(stateHistory) == 4 and len(newStateHistory) == 4:
-                        dataList = []
-                        newDataList = []
-                        for j in range(4):
-                            dataList.append(stateHistory[j])
-                            newDataList.append(newStateHistory[j])                        
-    
-                        self.modelRunner.addData(dataList, actionIndex, rewardSum, newDataList, False, episodeStep)
-                        self.modelRunner.train()
-                        rewardSum = 0
-    
-                    state = newState                   
-                    
-                            
-                if reward > 0:
-                    rewardSum += 1
-                elif reward < 0:
-                    rewardSum -= 1
+                reward = ale.act(action);
+                clippedReward = self.clipReward(reward)
+                rewardSum += clippedReward
+                episodeTotalReward += clippedReward
+                epochTotalReward += clippedReward
                 
-                ale.getRAM(ram)
+                state = self.getScreenPixels(ale)
+
+                self.replayMemory.add(actionIndex, rewardSum, state, ale.game_over())
+                self.modelRunner.train()
                 
-                if self.settings['SHOW_SCREEN']:
-                    self.displayInfo(screen, ram, action, total_reward)
-                    pygame.display.flip()
-            
-                total_reward += reward
+                historyBuffer[0, :-1] = historyBuffer[0, 1:]    
+                historyBuffer[0, -1] = state
                 
-                #delay to 60fps
-                #clock.tick(60.)
+                rewardSum = 0    
             
                 if(ale.game_over()):
-                    if len(stateHistory) == 4 and len(newStateHistory) == 4:
-                        dataList = []
-                        for j in range(4):
-                            dataList.append(stateHistory[j])
-                        self.modelRunner.addData(dataList, actionIndex, rewardSum, self.zeroHistory, True, episodeStep)
-
-                    episode_frame_number = ale.getEpisodeFrameNumber()
-                    frame_number = ale.getFrameNumber()
-                    print "Frame Number: %s, Episode Frame Number: %s, Elapsed: %.0fs" % (frame_number, episode_frame_number, (time.time() - episodeStartTime))
-                    print("Episode " + str(episode) + " ended with score: " + str(total_reward))
+                    print "Step Number: %s, Elapsed: %.1fs" % (stepNo, (time.time() - episodeStartTime))
+                    print("Episode " + str(episode) + " ended with score: " + str(episodeTotalReward))
                     
                     ale.reset_game()
+                    episodeStartTime = time.time()
                     
                     episode = episode + 1
-                    gameOver = True
-
+                    episodeTotalReward = 0
+                    historyBuffer.fill(0)
+                    
+                for skipFrame in range(self.settings['SKIP_SCREEN']):
+                    reward = ale.act(action);
+                    clippedReward = self.clipReward(reward)
+                    rewardSum += clippedReward
+                    episodeTotalReward += clippedReward
+                    epochTotalReward += clippedReward
+                    
+                 
+            print "[ Epoch %s ] ended with avg reward: %.1f. elapsed: %.0fs" % \
+                  (epoch, float(epochTotalReward) / episode, 
+                   time.time() - epochStartTime)
+                
+                
         self.modelRunner.finishTrain()
         
 class DebugInput(threading.Thread):
@@ -323,15 +260,20 @@ if __name__ == '__main__':
     
     settings = {}
 
-    settings['SHOW_SCREEN'] = True
+    settings['SHOW_SCREEN'] = False
     settings['USE_KEYBOARD'] = False
     settings['SOLVER_PROTOTXT'] = 'models/solver.prototxt'
-    settings['TEST_PROTOTXT'] = 'models/test.prototxt'
+    settings['TARGET_PROTOTXT'] = 'models/target.prototxt'
     settings['TRAIN_BATCH_SIZE'] = 32
-    settings['MAX_REPLAY_MEMORY'] = 250000
+    settings['MAX_REPLAY_MEMORY'] = 1000000
+    settings['MAX_EPOCH'] = 200
+    settings['EPOCH_STEP'] = 250000
     settings['DISCOUNT_FACTOR'] = 0.99
     settings['UPDATE_STEP'] = 2000
-    settings['SKIP_SCREEN'] = 4
+    settings['SKIP_SCREEN'] = 3
+    settings['SCREEN_WIDTH'] = 84
+    settings['SCREEN_HEIGHT'] = 84
+    settings['SCREEN_HISTORY'] = 4
     
     player = DeepRLPlayer(settings)
     player.gogo()

@@ -1,7 +1,7 @@
 name: "DQN"
 input: "data"
 input_shape {
-  dim: 1
+  dim: 32
   dim: 4
   dim: 84
   dim: 84
