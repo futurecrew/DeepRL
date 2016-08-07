@@ -49,43 +49,6 @@ class DeepRLPlayer:
         self.debug = False        
         DebugInput(self).start()
         
-
-    def displayInfo(self, screen, ram, a, total_reward):
-            font = pygame.font.SysFont("Ubuntu Mono",32)
-            text = font.render("RAM: " ,1,(255,208,208))
-            screen.blit(text,(330,10))
-        
-            font = pygame.font.SysFont("Ubuntu Mono",25)
-            height = font.get_height()*1.2
-        
-            line_pos = 40
-            ram_pos = 0
-            while(ram_pos < 128):
-                ram_string = ''.join(["%02X "%ram[x] for x in range(ram_pos,min(ram_pos+16,128))])
-                text = font.render(ram_string,1,(255,255,255))
-                screen.blit(text,(340,line_pos))
-                line_pos += height
-                ram_pos +=16
-                
-            #display current action
-            font = pygame.font.SysFont("Ubuntu Mono",32)
-            text = font.render("Current Action: " + str(a) ,1,(208,208,255))
-            height = font.get_height()*1.2
-            screen.blit(text,(330,line_pos))
-            line_pos += height
-        
-            #display reward
-            font = pygame.font.SysFont("Ubuntu Mono",30)
-            text = font.render("Total Reward: " + str(total_reward) ,1,(208,255,255))
-            screen.blit(text,(330,line_pos))
-
-    def display(self, rgb, gray=False):
-        if (gray):
-            plt.imshow(rgb, cmap='gray')
-        else:
-            plt.imshow(rgb)
-        plt.show()
-            
     def getScreenPixels(self, ale):
         grayScreen = ale.getScreenGrayscale()
         resized = cv2.resize(grayScreen, (84, 84))
@@ -134,6 +97,8 @@ class DeepRLPlayer:
             
         # DJDJ
         ale.setInt('frame_skip', 4)
+        ale.setFloat('repeat_action_probability', 0)
+        ale.setBool('color_averaging', True)
         
         ale.loadROM(sys.argv[1])
         self.legalActions = ale.getMinimalActionSet()
@@ -212,12 +177,20 @@ class DeepRLPlayer:
                                                                                 stepNo, (time.time() - episodeStartTime),
                                                                                 float(epochTotalReward) / episode,
                                                                                 totalStep)
-                    ale.reset_game()
                     episodeStartTime = time.time()
                     
                     episode += 1
                     episodeTotalReward = 0
                     historyBuffer.fill(0)
+
+                    ale.reset_game()
+                    for r in range(random.randint(4, 30)):
+                        ale.act(0)
+                        state = self.getScreenPixels(ale)
+                        historyBuffer[0, :-1] = historyBuffer[0, 1:]
+                        # DJDJ
+                        historyBuffer[0, -1] = state
+                        #historyBuffer[0, -1] = state / 255.0
                     
                 # DJDJ
                 """
@@ -269,12 +242,12 @@ if __name__ == '__main__':
     settings['TARGET_PROTOTXT'] = 'models/target2.prototxt'
     
     #settings['RESTORE'] = 'snapshot/dqn_iter_1100000.solverstate'
-    settings['PLAY'] = 'snapshot/dqn_iter_700000.caffemodel'    
+    #settings['PLAY'] = 'snapshot/dqn_iter_400000.caffemodel'    
     
     settings['TRAIN_BATCH_SIZE'] = 32
     # DJDJ
     #settings['MAX_REPLAY_MEMORY'] = 1000000
-    settings['MAX_REPLAY_MEMORY'] = 900000
+    settings['MAX_REPLAY_MEMORY'] = 850000
     settings['MAX_EPOCH'] = 200
     settings['EPOCH_STEP'] = 250000
     settings['DISCOUNT_FACTOR'] = 0.99
