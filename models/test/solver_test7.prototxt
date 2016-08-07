@@ -1,0 +1,11 @@
+train_net: "models/test/net_test7.prototxt"
+base_lr: 0.001
+lr_policy: "fixed"
+solver_type: RMSPROP
+rms_decay: 0.95
+display: 100
+average_loss: 100
+weight_decay: 0.0005
+snapshot: 1000000
+snapshot_prefix: "output/dqn"
+#debug_info: true
