@@ -3,12 +3,13 @@
 # ale_python_test_pygame_player.py
 # Author: Ben Goodrich
 #
-# This modified ale_python_test_pygame.py to provide a fully interactive experience allowing the player
+# This modified ale_python_test_pygame.py to provide a fully interactive experience allowing the game_player
 # to play. RAM Contents, current action, and reward are also displayed.
 # keys are:
 # arrow keys -> up/down/left/right
 # z -> fire button
 import sys
+import os
 from ale_python_interface import ALEInterface
 import numpy as np
 import random
@@ -36,8 +37,17 @@ class DeepRLPlayer:
         self.sendQueue = multiprocessing.Queue()
 
         self.replayMemory = ReplayMemory(self.settings['MAX_REPLAY_MEMORY'], self.settings)
-        # DJDJ        
-        #DebugInput(self).start()
+        
+        util.Logger('output')
+        
+        if os.path.exists('output') == False:
+            os.makedirs('output')
+        if os.path.exists('snapshot') == False:
+            os.makedirs('snapshot')
+        
+        # DJDJ
+        self.debug = False        
+        DebugInput(self).start()
         
 
     def displayInfo(self, screen, ram, a, total_reward):
@@ -75,33 +85,6 @@ class DeepRLPlayer:
         else:
             plt.imshow(rgb)
         plt.show()
-
-    """
-    def getScreenPixels(self, ale, screen, game_surface):
-        
-        numpy_surface = np.frombuffer(game_surface.get_buffer(),dtype=np.int32)
-        ale.getScreenRGB(numpy_surface)
-        
-        #del numpy_surface
-        
-
-        if (self.settings['SHOW_SCREEN']):
-            screen.fill((0,0,0))
-            screen.blit(pygame.transform.scale2x(game_surface),(0,0))
-            #screen.blit(game_surface.copy(),(0,0))
-
-        data = numpy_surface.view(np.uint8).reshape(numpy_surface.shape + (4,))
-        rgba = np.reshape(data, (self.screen_height, self.screen_width, 4))
-        rgb = rgba[:, :, (2, 1, 0)]
-        resized = imresize(rgb, (110, 84, 3))
-        cropped = resized[26:110, :, :].astype(np.float) / 256
-        
-        #self.grayPixels = np.dot(cropped[...,:3], [0.299, 0.587, 0.114])
-        self.grayPixels = np.dot(cropped[...,:3], [29.9, 58.7, 11.4]).astype(np.uint8)
-        #self.display(self.grayPixels, gray=True)
-
-        return self.grayPixels
-    """
             
     def getScreenPixels(self, ale):
         grayScreen = ale.getScreenGrayscale()
@@ -124,21 +107,20 @@ class DeepRLPlayer:
             self.greedyEpsilon = 1.0 - 0.9 / 10**6 * totalStep
 
         if random.random() < self.greedyEpsilon:
-            return random.randrange(0, len(self.legalActions))
+            return random.randrange(0, len(self.legalActions)), 'random'
         else:
             actionValues = self.modelRunner.predict(historyBuffer)
             actionIndex = np.argmax(actionValues)
-            return actionIndex
-    
-    def clipReward(self, reward):
-            if reward > 0:
-                return 1
-            elif reward < 0:
-                return -1
-            else:
-                return 0
+            return actionIndex, 'trained'
+        
+    def printEnv(self):
+        print '[ Running Environment ]'
+        for key in self.settings.keys():
+            print '%s: \t%s' % (key, self.settings[key])
         
     def gogo(self):
+        self.printEnv()
+        
         ale = ALEInterface()
         
         max_frames_per_episode = ale.getInt("max_num_frames_per_episode");
@@ -147,9 +129,12 @@ class DeepRLPlayer:
         random_seed = ale.getInt("random_seed")
         print("random_seed: " + str(random_seed))
 
-        if self.settings['SHOW_SCREEN']:
+        if self.settings['SHOW_SCREEN'] or 'PLAY' in self.settings:
             ale.setBool('display_screen', True)
             
+        # DJDJ
+        ale.setInt('frame_skip', 4)
+        
         ale.loadROM(sys.argv[1])
         self.legalActions = ale.getMinimalActionSet()
         print self.legalActions
@@ -169,6 +154,14 @@ class DeepRLPlayer:
         ram_size = ale.getRAMSize()
         ram = np.zeros((ram_size),dtype=np.uint8)
         action = 0
+        totalStep = 0
+        
+        # DJDJ
+        if 'RESORE' in settings:
+            totalStep = 10**6 - 1
+        elif 'PLAY' in settings:
+            totalStep = 10**6 - 1
+            #self.greedyEpsilon = 0.0
         
         for epoch in range(1, self.settings['MAX_EPOCH'] + 1):
             epochTotalReward = 0
@@ -181,53 +174,64 @@ class DeepRLPlayer:
             historyBuffer = np.zeros((settings['TRAIN_BATCH_SIZE'], 
                                       settings['SCREEN_HISTORY'],
                                       settings['SCREEN_HEIGHT'], 
-                                      settings['SCREEN_WIDTH']))
-             
-            for stepNo in range(self.settings['EPOCH_STEP']):
-                episodeStep = ale.getEpisodeFrameNumber()
-                totalStep = ale.getFrameNumber()
+                                      settings['SCREEN_WIDTH']), dtype=np.float32)
 
-                actionIndex = self.getActionFromModel(historyBuffer, totalStep)
+            for stepNo in range(self.settings['EPOCH_STEP']):
+                totalStep += 1
+
+                actionIndex, type = self.getActionFromModel(historyBuffer, totalStep)
                 action = self.legalActions[actionIndex]
+                
+                if (self.debug):
+                    print 'epsilon : %.2f, action : %s, %s' % (self.greedyEpsilon, action, type)
                     
                 reward = ale.act(action);
-                clippedReward = self.clipReward(reward)
-                rewardSum += clippedReward
-                episodeTotalReward += clippedReward
-                epochTotalReward += clippedReward
+                rewardSum += reward
+                episodeTotalReward += reward
+                epochTotalReward += reward
                 
                 state = self.getScreenPixels(ale)
 
-                self.replayMemory.add(actionIndex, rewardSum, state, ale.game_over())
-                self.modelRunner.train()
+                if 'PLAY' not in settings:
+                    self.replayMemory.add(actionIndex, rewardSum, state, ale.game_over())
+                    
+                    # DJDJ
+                    if totalStep % 4 == 0:
+                        self.modelRunner.train()
                 
-                historyBuffer[0, :-1] = historyBuffer[0, 1:]    
+                historyBuffer[0, :-1] = historyBuffer[0, 1:]
+                # DJDJ
                 historyBuffer[0, -1] = state
+                #historyBuffer[0, -1] = state / 255.0
                 
                 rewardSum = 0    
             
                 if(ale.game_over()):
-                    print "Step Number: %s, Elapsed: %.1fs" % (stepNo, (time.time() - episodeStartTime))
-                    print("Episode " + str(episode) + " ended with score: " + str(episodeTotalReward))
-                    
+                    print "Episode %s : score: %s, step: %s, elapsed: %.1fs, avg: %.2f, total step=%s" % (
+                                                                                episode, episodeTotalReward,
+                                                                                stepNo, (time.time() - episodeStartTime),
+                                                                                float(epochTotalReward) / episode,
+                                                                                totalStep)
                     ale.reset_game()
                     episodeStartTime = time.time()
                     
-                    episode = episode + 1
+                    episode += 1
                     episodeTotalReward = 0
                     historyBuffer.fill(0)
                     
+                # DJDJ
+                """
                 for skipFrame in range(self.settings['SKIP_SCREEN']):
                     reward = ale.act(action);
-                    clippedReward = self.clipReward(reward)
-                    rewardSum += clippedReward
-                    episodeTotalReward += clippedReward
-                    epochTotalReward += clippedReward
-                    
+                    rewardSum += reward
+                    episodeTotalReward += reward
+                    epochTotalReward += reward
+                """
                  
-            print "[ Epoch %s ] ended with avg reward: %.1f. elapsed: %.0fs" % \
+            print "[ Epoch %s ] ended with avg score: %.1f. elapsed: %.0fs. last e: %.2f" % \
                   (epoch, float(epochTotalReward) / episode, 
-                   time.time() - epochStartTime)
+                   time.time() - epochStartTime,
+                   self.greedyEpsilon)
                 
                 
         self.modelRunner.finishTrain()
@@ -239,14 +243,12 @@ class DebugInput(threading.Thread):
         self.running = True
     
     def run(self):
+        time.sleep(2)
         while (self.running):
             input = raw_input('')
             if input == 'd':
-                if player.settings['SHOW_SCREEN']:
-                    player.settings['SHOW_SCREEN'] = False
-                else:
-                    player.settings['SHOW_SCREEN'] = True
-                print 'settings[\'SHOW_SCREEN\'] : %s' % player.settings['SHOW_SCREEN']
+                self.player.debug = not self.player.debug
+                print 'Debug mode : %s' % self.player.debug
                 
     def finish(self):
         self.running = False
@@ -260,16 +262,23 @@ if __name__ == '__main__':
     
     settings = {}
 
+    #settings['SHOW_SCREEN'] = True
     settings['SHOW_SCREEN'] = False
     settings['USE_KEYBOARD'] = False
-    settings['SOLVER_PROTOTXT'] = 'models/solver.prototxt'
-    settings['TARGET_PROTOTXT'] = 'models/target.prototxt'
+    settings['SOLVER_PROTOTXT'] = 'models/solver2.prototxt'
+    settings['TARGET_PROTOTXT'] = 'models/target2.prototxt'
+    
+    #settings['RESTORE'] = 'snapshot/dqn_iter_1100000.solverstate'
+    settings['PLAY'] = 'snapshot/dqn_iter_700000.caffemodel'    
+    
     settings['TRAIN_BATCH_SIZE'] = 32
-    settings['MAX_REPLAY_MEMORY'] = 1000000
+    # DJDJ
+    #settings['MAX_REPLAY_MEMORY'] = 1000000
+    settings['MAX_REPLAY_MEMORY'] = 900000
     settings['MAX_EPOCH'] = 200
     settings['EPOCH_STEP'] = 250000
     settings['DISCOUNT_FACTOR'] = 0.99
-    settings['UPDATE_STEP'] = 2000
+    settings['UPDATE_STEP'] = 10000
     settings['SKIP_SCREEN'] = 3
     settings['SCREEN_WIDTH'] = 84
     settings['SCREEN_HEIGHT'] = 84

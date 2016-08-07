@@ -26,42 +26,54 @@ class ModelRunner():
         else:
             self.targetNet = caffe.Net(settings['TARGET_PROTOTXT'], caffe.TEST)
 
+        if 'RESORE' in settings:
+            self.solver.restore(settings['RESTORE'])
+            self.updateModel()
+        if 'PLAY' in settings:
+            self.trainNet.copy_from(settings['PLAY'])
+
         self.replayMemory = replayMemory
         self.running = True
         self.step = 0
         self.blankLabel = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
 
-        # DJDJ
         #thread.start_new_thread(self.train, ())
+    
+    def clipReward(self, reward):
+            if reward > 0:
+                return 1
+            elif reward < 0:
+                return -1
+            else:
+                return 0
 
     def predict(self, historyBuffer):
         self.trainNet.forward(
-                              data = historyBuffer.astype(np.float32, copy=False),
+                              data = (historyBuffer).astype(np.float32, copy=False),
                               labels = self.blankLabel)
         return self.trainNet.blobs['cls_score'].data[0]            
 
     def train(self):
         if self.replayMemory.count <= 50000:
-        #if self.replayMemory.count <= 500:
+        #if self.replayMemory.count <= 1000:
             return
         
         prestates, actions, rewards, poststates, gameOvers = self.replayMemory.getMinibatch()
         
         # Get Q*(s, a)
         self.targetNet.forward(data=poststates.astype(np.float32, copy=False))
-        newActionValues = self.targetNet.blobs['cls_score'].data.copy()
+        targetValues = self.targetNet.blobs['cls_score'].data
         
         # Get Q(s, a)
-        label = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
         self.trainNet.forward(data=prestates.astype(np.float32, copy=False),
-                                                  labels=label)
+                                                  labels=self.blankLabel)
         label = self.trainNet.blobs['cls_score'].data.copy()
         
         for i in range(0, self.trainBatchSize):
             if gameOvers[i]:
-                label[i, actions[i]] = rewards[i]
+                label[i, actions[i]] = self.clipReward(rewards[i])
             else:
-                label[i, actions[i]] = rewards[i] + self.discountFactor* np.max(newActionValues[i])
+                label[i, actions[i]] = self.clipReward(rewards[i]) + self.discountFactor* np.max(targetValues[i])
 
         self.trainNet.blobs['data'].data[...] = prestates.astype(np.float32, copy=False)
         self.trainNet.blobs['labels'].data[...] = label

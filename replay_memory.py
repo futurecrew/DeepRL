@@ -18,8 +18,11 @@ class ReplayMemory:
     self.current = 0
 
     # pre-allocate prestates and poststates for minibatch
+    # DJDJ
     self.prestates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.uint8)
     self.poststates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.uint8)
+    #self.prestates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.float32)
+    #self.poststates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.float32)
 
     logger.info("Replay memory size: %d" % self.size)
 
@@ -68,8 +71,11 @@ class ReplayMemory:
         break
       
       # NB! having index first is fastest in C-order matrices
+      # DJDJ
       self.prestates[len(indexes), ...] = self.getState(index - 1)
       self.poststates[len(indexes), ...] = self.getState(index)
+      #self.prestates[len(indexes), ...] = self.getState(index - 1) / 255.0
+      #self.poststates[len(indexes), ...] = self.getState(index) / 255.0
       indexes.append(index)
 
     # copy actions, rewards and terminals with direct slicing
