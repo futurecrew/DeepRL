@@ -1,6 +1,5 @@
 import sys
 import time
-import pygame
 
 key_action_tform_table = (
 0, #00000 none
@@ -37,17 +36,6 @@ key_action_tform_table = (
 14  #11111 fire up/down/left/right (invalid)
 )
 
-def getActionFromKeys():
-    keys = 0
-    pressed = pygame.key.get_pressed()
-    keys |= pressed[pygame.K_UP]
-    keys |= pressed[pygame.K_DOWN]  <<1
-    keys |= pressed[pygame.K_LEFT]  <<2
-    keys |= pressed[pygame.K_RIGHT] <<3
-    keys |= pressed[pygame.K_z] <<4
-    a = key_action_tform_table[keys]
-    return a, pressed
-
 class Logger(object):
     def __init__(self, folder):
         filename="%s/%s.log" % (folder, time.strftime('%Y%m%d_%H%M%S'))
@@ -60,3 +48,7 @@ class Logger(object):
     def write(self, message):
         self.terminal.write(message)
         self.log.write(message)
+        
+    def flush(self):
+        self.terminal.flush()
+        self.log.flush()

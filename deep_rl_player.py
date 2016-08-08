@@ -13,16 +13,14 @@ import os
 from ale_python_interface import ALEInterface
 import numpy as np
 import random
-import pygame
 import multiprocessing
 import cv2
-import matplotlib.pyplot as plt
-from scipy.misc import imresize
 import pickle
 import threading
 import time
 import util
-from model_runner import ModelRunner
+#from model_runner import ModelRunner
+from model_runner_neon import ModelRunnerNeon
 from replay_memory import ReplayMemory
 
 class DeepRLPlayer:
@@ -45,7 +43,10 @@ class DeepRLPlayer:
         if os.path.exists('snapshot') == False:
             os.makedirs('snapshot')
         
-        # DJDJ
+        self.batchDimension = (settings['TRAIN_BATCH_SIZE'], 
+                                      settings['SCREEN_HISTORY'],
+                                      settings['SCREEN_HEIGHT'], 
+                                      settings['SCREEN_WIDTH'])
         self.debug = False        
         DebugInput(self).start()
         
@@ -54,17 +55,6 @@ class DeepRLPlayer:
         resized = cv2.resize(grayScreen, (84, 84))
         return resized
     
-    def checkExit(self, pressed): 
-        #process pygame event queue
-        exit=False
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                exit=True
-                break;
-        if(pressed[pygame.K_q]):
-            exit = True
-        return exit
-        
     def getActionFromModel(self, historyBuffer, totalStep):
         if totalStep <= 10**6:
             self.greedyEpsilon = 1.0 - 0.9 / 10**6 * totalStep
@@ -95,7 +85,6 @@ class DeepRLPlayer:
         if self.settings['SHOW_SCREEN'] or 'PLAY' in self.settings:
             ale.setBool('display_screen', True)
             
-        # DJDJ
         ale.setInt('frame_skip', 4)
         ale.setFloat('repeat_action_probability', 0)
         ale.setBool('color_averaging', True)
@@ -110,10 +99,12 @@ class DeepRLPlayer:
         (display_width,display_height) = (1024,420)
         
 
-        self.modelRunner = ModelRunner(
+        #self.modelRunner = ModelRunner(
+        self.modelRunner = ModelRunnerNeon(
                                     self.settings, 
                                     maxActionNo = len(self.legalActions),
-                                    replayMemory = self.replayMemory
+                                    replayMemory = self.replayMemory,
+                                    batchDimension = self.batchDimension
                                     )
         
         ram_size = ale.getRAMSize()
@@ -122,7 +113,7 @@ class DeepRLPlayer:
         totalStep = 0
         
         # DJDJ
-        if 'RESORE' in settings:
+        if 'RESTORE' in settings:
             totalStep = 10**6 - 1
         elif 'PLAY' in settings:
             totalStep = 10**6 - 1
@@ -136,10 +127,7 @@ class DeepRLPlayer:
             ale.reset_game()
             episode = 1
             rewardSum = 0
-            historyBuffer = np.zeros((settings['TRAIN_BATCH_SIZE'], 
-                                      settings['SCREEN_HISTORY'],
-                                      settings['SCREEN_HEIGHT'], 
-                                      settings['SCREEN_WIDTH']), dtype=np.float32)
+            historyBuffer = np.zeros(self.batchDimension, dtype=np.float32)
 
             for stepNo in range(self.settings['EPOCH_STEP']):
                 totalStep += 1
@@ -150,7 +138,7 @@ class DeepRLPlayer:
                 if (self.debug):
                     print 'epsilon : %.2f, action : %s, %s' % (self.greedyEpsilon, action, type)
                     
-                reward = ale.act(action);
+                reward = ale.act(action)
                 rewardSum += reward
                 episodeTotalReward += reward
                 epochTotalReward += reward
@@ -162,12 +150,10 @@ class DeepRLPlayer:
                     
                     # DJDJ
                     if totalStep % 4 == 0:
-                        self.modelRunner.train()
+                        self.modelRunner.train(epoch)
                 
                 historyBuffer[0, :-1] = historyBuffer[0, 1:]
-                # DJDJ
                 historyBuffer[0, -1] = state
-                #historyBuffer[0, -1] = state / 255.0
                 
                 rewardSum = 0    
             
@@ -188,18 +174,7 @@ class DeepRLPlayer:
                         ale.act(0)
                         state = self.getScreenPixels(ale)
                         historyBuffer[0, :-1] = historyBuffer[0, 1:]
-                        # DJDJ
                         historyBuffer[0, -1] = state
-                        #historyBuffer[0, -1] = state / 255.0
-                    
-                # DJDJ
-                """
-                for skipFrame in range(self.settings['SKIP_SCREEN']):
-                    reward = ale.act(action);
-                    rewardSum += reward
-                    episodeTotalReward += reward
-                    epochTotalReward += reward
-                """
                  
             print "[ Epoch %s ] ended with avg score: %.1f. elapsed: %.0fs. last e: %.2f" % \
                   (epoch, float(epochTotalReward) / episode, 
@@ -241,13 +216,13 @@ if __name__ == '__main__':
     settings['SOLVER_PROTOTXT'] = 'models/solver2.prototxt'
     settings['TARGET_PROTOTXT'] = 'models/target2.prototxt'
     
-    #settings['RESTORE'] = 'snapshot/dqn_iter_1100000.solverstate'
-    #settings['PLAY'] = 'snapshot/dqn_iter_400000.caffemodel'    
+    #settings['RESTORE'] = 'snapshot/dqn_iter_400000.solverstate'
+    settings['PLAY'] = 'snapshot/dqn_neon_200000.prm'    
     
     settings['TRAIN_BATCH_SIZE'] = 32
     # DJDJ
     #settings['MAX_REPLAY_MEMORY'] = 1000000
-    settings['MAX_REPLAY_MEMORY'] = 850000
+    settings['MAX_REPLAY_MEMORY'] = 900000
     settings['MAX_EPOCH'] = 200
     settings['EPOCH_STEP'] = 250000
     settings['DISCOUNT_FACTOR'] = 0.99
@@ -256,6 +231,10 @@ if __name__ == '__main__':
     settings['SCREEN_WIDTH'] = 84
     settings['SCREEN_HEIGHT'] = 84
     settings['SCREEN_HISTORY'] = 4
+
+    settings['LEARNING_RATE'] = 0.00025
+    settings['RMS_DECAY'] = 0.95
+    
     
     player = DeepRLPlayer(settings)
     player.gogo()

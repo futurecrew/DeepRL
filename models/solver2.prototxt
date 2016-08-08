@@ -10,6 +10,6 @@ lr_policy: "fixed"
 display: 1000
 average_loss: 100
 weight_decay: 0.0005
-snapshot: 100000
+snapshot: 50000
 snapshot_prefix: "snapshot/dqn"
 #debug_info: true

@@ -26,7 +26,7 @@ class ModelRunner():
         else:
             self.targetNet = caffe.Net(settings['TARGET_PROTOTXT'], caffe.TEST)
 
-        if 'RESORE' in settings:
+        if 'RESTORE' in settings:
             self.solver.restore(settings['RESTORE'])
             self.updateModel()
         if 'PLAY' in settings:
