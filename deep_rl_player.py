@@ -85,11 +85,11 @@ class DeepRLPlayer:
         if self.settings['SHOW_SCREEN'] or 'PLAY' in self.settings:
             ale.setBool('display_screen', True)
             
-        ale.setInt('frame_skip', 4)
+        ale.setInt('frame_skip', settings['FRAME_SKIP'])
         ale.setFloat('repeat_action_probability', 0)
         ale.setBool('color_averaging', True)
         
-        ale.loadROM(sys.argv[1])
+        ale.loadROM(settings['ROM'])
         self.legalActions = ale.getMinimalActionSet()
         print self.legalActions
         
@@ -116,8 +116,8 @@ class DeepRLPlayer:
         if 'RESTORE' in settings:
             totalStep = 10**6 - 1
         elif 'PLAY' in settings:
-            totalStep = 10**6 - 1
-            #self.greedyEpsilon = 0.0
+            totalStep = 10**6 + 1
+            self.greedyEpsilon = 0.05
         
         for epoch in range(1, self.settings['MAX_EPOCH'] + 1):
             epochTotalReward = 0
@@ -210,6 +210,11 @@ if __name__ == '__main__':
     
     settings = {}
 
+    #settings['ROM'] = '/media/big/download/roms/breakout.bin'
+    settings['ROM'] = '/media/big/download/roms/space_invaders.bin'
+    
+    settings['FRAME_SKIP'] = 3
+
     #settings['SHOW_SCREEN'] = True
     settings['SHOW_SCREEN'] = False
     settings['USE_KEYBOARD'] = False
@@ -217,7 +222,7 @@ if __name__ == '__main__':
     settings['TARGET_PROTOTXT'] = 'models/target2.prototxt'
     
     #settings['RESTORE'] = 'snapshot/dqn_iter_400000.solverstate'
-    settings['PLAY'] = 'snapshot/dqn_neon_200000.prm'    
+    settings['PLAY'] = 'snapshot/dqn_neon_950000.prm'    
     
     settings['TRAIN_BATCH_SIZE'] = 32
     # DJDJ

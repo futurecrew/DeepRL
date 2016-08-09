@@ -80,6 +80,8 @@ class ModelRunnerNeon():
 
     def setInput(self, data):
         self.input.set(data.transpose(1, 2, 3, 0).copy())
+        # normalize network input between 0 and 1
+        self.be.divide(self.input, 255, self.input)
         
     def predict(self, historyBuffer):
         self.setInput(historyBuffer)
