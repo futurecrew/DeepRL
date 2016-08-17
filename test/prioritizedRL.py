@@ -16,8 +16,11 @@ class Tester:
         
     def initialize(self):
         self.Qval = np.random.normal(0, 0.1, (self.totalState, self.totalAction)).astype(np.float32)
-        self.wrongActions = np.random.random_integers(0, 1, self.totalState)
         self.params = np.random.normal(0, 0.1, (self.totalState * self.totalAction + 1)).astype(np.float32)
+        self.wrongActions = np.zeros((self.totalState))
+        for i in range(self.totalAction):
+            if i % 2 == 0:
+                self.wrongActions[i] = 1
         
     def getAction(self, s):
         if random.random() < self.epsilon:
@@ -28,7 +31,7 @@ class Tester:
     def getFeatures(self, s, a):
         features = np.zeros((self.totalState * self.totalAction + 1), dtype=np.int)
         features[s * self.totalAction + a] = 1                      
-        features[self.totalState + self.totalAction] = 1       # bias
+        features[self.totalState * self.totalAction] = 1       # bias
         return features
         
     def getQval(self, s, a=None):
@@ -52,6 +55,9 @@ class Tester:
         else:
             return False
         
+    def getTrueAction(self, s):
+        return 1 - self.wrongActions[s]
+        
     def doAction(self, s, a):
         """ returns next state and reward """
          
@@ -70,12 +76,23 @@ class Tester:
             self.Qval[s, a] = self.getQval(s, a) + self.stepSize * td
             
     def isComplete(self):
-        for s in range(self.totalState):
-            policy = np.argmax(self.getQval(s))
-            if self.isWrongAction(s, policy) == True:
-                return False
-        return True
-    
+        R = 1.0
+        error = 0
+        for s in range(self.totalState-1, -1, -1):
+            for a in range(self.totalAction):
+                estimate = self.getQval(s, a)
+                if self.isWrongAction(s, a):
+                    groundTruth = 0
+                else:
+                    groundTruth = R
+                error += np.square(groundTruth - estimate)
+            R *= self.discount
+            
+        if error / (self.totalState * self.totalAction) <= 10**-3:
+            return True
+        else:
+            return False
+        
     def gogo(self):        
         print 'Training starts'
 
@@ -87,7 +104,10 @@ class Tester:
             for i in range(self.maxIter):
                 a = self.getAction(s)
                 s2, r = self.doAction(s, a)
-                td = r + self.discount * np.max(self.getQval(s2)) - self.getQval(s, a)
+                if s2 == 0:     # terminal state
+                    td = r - self.getQval(s, a)
+                else:
+                    td = r + self.discount * np.max(self.getQval(s2)) - self.getQval(s, a)
                 self.updateValue(s, a, td)
                 s = s2
                 
@@ -98,7 +118,7 @@ class Tester:
                         break
         
         print '%s' % trainDone
-        print '%s state training complete with %s. mean iters = %.0f' % (self.totalState, self.mode, np.mean(trainDone))
+        print '%s state training complete with %s mean iters = %.0f' % (self.totalState, self.mode, np.mean(trainDone))
         
 if __name__ == '__main__':
     Tester().gogo()
