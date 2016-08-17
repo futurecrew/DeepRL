@@ -10,6 +10,7 @@ class Tester:
         self.discount = 1.0 - 1.0 / self.totalState
         self.maxIter = 10**6
         self.repeatNo = 10
+        self.replayMemory = []
         
         self.mode = 'FA'
         #self.mode = 'Tablar'
@@ -17,10 +18,25 @@ class Tester:
     def initialize(self):
         self.Qval = np.random.normal(0, 0.1, (self.totalState, self.totalAction)).astype(np.float32)
         self.params = np.random.normal(0, 0.1, (self.totalState * self.totalAction + 1)).astype(np.float32)
-        self.wrongActions = np.zeros((self.totalState))
+        self.wrongActions = np.zeros((self.totalState), dtype=np.int8)
         for i in range(self.totalAction):
             if i % 2 == 0:
                 self.wrongActions[i] = 1
+        self.generateReplay()
+    
+    def generateReplay(self):
+        for s in range(self.totalState-1, -1, -1):
+            repeat = 2 ** (self.totalState - s - 1)
+            for r in range(repeat):
+                a = self.getTrueAction(s)
+                s2, r = self.doAction(s, a)
+                self.replayMemory.append((s, a, r, s2))
+
+                a = self.getWrongAction(s)
+                s2, r = self.doAction(s, a)
+                self.replayMemory.append((s, a, r, s2))
+        
+        random.shuffle(self.replayMemory)
         
     def getAction(self, s):
         if random.random() < self.epsilon:
@@ -58,6 +74,9 @@ class Tester:
     def getTrueAction(self, s):
         return 1 - self.wrongActions[s]
         
+    def getWrongAction(self, s):
+        return self.wrongActions[s]
+        
     def doAction(self, s, a):
         """ returns next state and reward """
          
@@ -93,8 +112,32 @@ class Tester:
         else:
             return False
         
-    def gogo(self):        
-        print 'Training starts'
+    def gogoReplay(self):
+        print 'Training replay'
+
+        trainDone = []
+        for repeat in range(self.repeatNo):
+            self.initialize()
+            
+            for i in range(self.maxIter):
+                s, a, r, s2 = self.replayMemory[random.randint(0, len(self.replayMemory)-1)]
+                if s2 == 0:     # terminal state
+                    td = r - self.getQval(s, a)
+                else:
+                    td = r + self.discount * np.max(self.getQval(s2)) - self.getQval(s, a)
+                self.updateValue(s, a, td)
+                
+                if i % 10 == 0:
+                    if self.isComplete():
+                        #print 'training done %s out of %s' % (repeat, self.repeatNo)
+                        trainDone.append(i)
+                        break
+        
+        print '%s' % trainDone
+        print '%s state training complete with %s mean iters = %.0f' % (self.totalState, self.mode, np.mean(trainDone))
+        
+    def gogoOnline(self):
+        print 'Training online'
 
         trainDone = []
         for repeat in range(self.repeatNo):
@@ -121,4 +164,5 @@ class Tester:
         print '%s state training complete with %s mean iters = %.0f' % (self.totalState, self.mode, np.mean(trainDone))
         
 if __name__ == '__main__':
-    Tester().gogo()
+    #Tester().gogoOnline()
+    Tester().gogoReplay()
