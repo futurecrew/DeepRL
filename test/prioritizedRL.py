@@ -1,9 +1,10 @@
 import random
 import numpy as np
+from binaryHeap import BinaryHeap
 
 class Tester:
     def __init__(self):
-        self.totalState = 5
+        self.totalState = 10
         self.totalAction = 2
         self.epsilon = 0.1 
         self.stepSize = 0.25
@@ -14,6 +15,10 @@ class Tester:
         
         self.mode = 'FA'
         #self.mode = 'Tablar'
+        
+        #self.samplePolicy = 'uniform'
+        self.samplePolicy = 'maxPriority'
+        self.binaryHeap = BinaryHeap()
         
     def initialize(self):
         self.Qval = np.random.normal(0, 0.1, (self.totalState, self.totalAction)).astype(np.float32)
@@ -35,8 +40,11 @@ class Tester:
                 a = self.getWrongAction(s)
                 s2, r = self.doAction(s, a)
                 self.replayMemory.append((s, a, r, s2))
-        
         random.shuffle(self.replayMemory)
+
+        if self.samplePolicy == 'maxPriority':
+            for data in self.replayMemory:
+                self.binaryHeap.add(data, 1.0)
         
     def getAction(self, s):
         if random.random() < self.epsilon:
@@ -93,6 +101,9 @@ class Tester:
             self.params += self.stepSize * td * self.getFeatures(s, a)
         else:
             self.Qval[s, a] = self.getQval(s, a) + self.stepSize * td
+
+        if self.samplePolicy == 'maxPriority':
+            self.binaryHeap.reorderTop(np.abs(td))
             
     def isComplete(self):
         R = 1.0
@@ -111,7 +122,13 @@ class Tester:
             return True
         else:
             return False
-        
+
+    def sampleReplay(self):
+        if self.samplePolicy == 'uniform':
+            return self.replayMemory[random.randint(0, len(self.replayMemory)-1)]
+        elif self.samplePolicy == 'maxPriority':
+            return self.binaryHeap.getTop()[0]
+
     def gogoReplay(self):
         print 'Training replay'
 
@@ -120,7 +137,7 @@ class Tester:
             self.initialize()
             
             for i in range(self.maxIter):
-                s, a, r, s2 = self.replayMemory[random.randint(0, len(self.replayMemory)-1)]
+                s, a, r, s2 = self.sampleReplay()
                 if s2 == 0:     # terminal state
                     td = r - self.getQval(s, a)
                 else:
