@@ -4,7 +4,7 @@ from binaryHeap import BinaryHeap
 
 class Tester:
     def __init__(self):
-        self.totalState = 10
+        self.totalState = 5
         self.totalAction = 2
         self.epsilon = 0.1 
         self.stepSize = 0.25
@@ -20,6 +20,8 @@ class Tester:
         self.samplePolicy = 'maxPriority'
         self.binaryHeap = BinaryHeap()
         
+        print 'replay memory size : %s' % (2**(self.totalState + 1) - 2)
+        
     def initialize(self):
         self.Qval = np.random.normal(0, 0.1, (self.totalState, self.totalAction)).astype(np.float32)
         self.params = np.random.normal(0, 0.1, (self.totalState * self.totalAction + 1)).astype(np.float32)
@@ -27,6 +29,7 @@ class Tester:
         for i in range(self.totalAction):
             if i % 2 == 0:
                 self.wrongActions[i] = 1
+        self.replayMemory = []
         self.generateReplay()
     
     def generateReplay(self):
@@ -146,7 +149,7 @@ class Tester:
                 
                 if i % 10 == 0:
                     if self.isComplete():
-                        #print 'training done %s out of %s' % (repeat, self.repeatNo)
+                        #print 'training done %s out of %s' % (repeat+1, self.repeatNo)
                         trainDone.append(i)
                         break
         
@@ -173,7 +176,7 @@ class Tester:
                 
                 if i % 10 == 0:
                     if self.isComplete():
-                        #print 'training done %s out of %s' % (repeat, self.repeatNo)
+                        #print 'training done %s out of %s' % (repeat+1, self.repeatNo)
                         trainDone.append(i)
                         break
         
