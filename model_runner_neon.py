@@ -14,11 +14,13 @@ from neon.transforms import SumSquared
 from neon.optimizers import GradientDescentMomentum, RMSProp
 
 class ModelRunnerNeon():
-    def __init__(self, settings,  maxActionNo, replayMemory, batchDimension):
+    def __init__(self, settings,  maxActionNo, batchDimension, snapshotFolder):
         self.trainBatchSize = settings['TRAIN_BATCH_SIZE']
         self.discountFactor = settings['DISCOUNT_FACTOR']
         self.updateStep = settings['UPDATE_STEP']
-        self.maxReplayMemory = settings['MAX_REPLAY_MEMORY']
+        self.saveStep = settings['SAVE_STEP']
+        self.snapshotFolder = snapshotFolder
+        self.totalTrainStep = 0
         
         self.be = gen_backend(backend='gpu',             
                          batch_size=self.trainBatchSize)
@@ -53,17 +55,25 @@ class ModelRunnerNeon():
         if 'PLAY' in settings:
             self.load(settings['PLAY'])
 
-        self.replayMemory = replayMemory
         self.running = True
-        self.step = 0
         self.blankLabel = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
 
+    def __getstate__(self):
+        d = dict(self.__dict__)
+        del d['be']
+        del d['input']
+        del d['targets']
+        del d['cost']
+        del d['optimizer']
+        del d['trainNet']
+        del d['targetNet']
+        return d
     
     def createLayers(self, maxActionNo):
         init_gauss = Gaussian(0, 0.01)
         layers = [Conv(fshape=(8, 8, 32), strides=4, init=init_gauss, activation=Rectlin()),
                         Conv(fshape=(4, 4, 64), strides=2, init=init_gauss, activation=Rectlin()),
-                        Conv(fshape=(3, 3, 64), strides=3, init=init_gauss, activation=Rectlin()),
+                        Conv(fshape=(3, 3, 64), strides=1, init=init_gauss, activation=Rectlin()),
                         Affine(nout=512, init=init_gauss, activation=Rectlin()),
                         Affine(nout=maxActionNo, init=init_gauss)
                         ]
@@ -88,12 +98,8 @@ class ModelRunnerNeon():
         output  = self.trainNet.fprop(self.input, inference=True)
         return output.T.asnumpyarray()[0]            
 
-    def train(self, epoch):
-        if self.replayMemory.count <= 50000:
-        #if self.replayMemory.count <= 1000:
-            return
-        
-        prestates, actions, rewards, poststates, gameOvers = self.replayMemory.getMinibatch()
+    def train(self, minibatch):
+        prestates, actions, rewards, poststates, gameOvers = minibatch
         
         # Get Q*(s, a)
         self.setInput(poststates)
@@ -114,31 +120,32 @@ class ModelRunnerNeon():
         self.targets.set(label)
     
         delta = self.cost.get_errors(preQvalue, self.targets)
+
+        # DJDJ
+        self.be.clip(delta, -1.0, 1.0, out = delta)
         
         self.trainNet.bprop(delta)
 
-        self.optimizer.optimize(self.trainNet.layers_to_optimize, epoch=epoch)
+        self.optimizer.optimize(self.trainNet.layers_to_optimize, epoch=0)
 
-        self.step += 1
+        self.totalTrainStep += 1
         
-        if  self.step % self.updateStep == 0:
+        if self.totalTrainStep % self.updateStep == 0:
             self.updateModel()
-
-        #if self.step % self.saveStep == 0:
-        if self.step % 50000 == 0:
-            self.save()
 
     def updateModel(self):
         # have to serialize also states for batch normalization to work
         pdict = self.trainNet.get_description(get_weights=True, keep_states=True)
         self.targetNet.deserialize(pdict, load_states=True)
-        print ('Updated target model')
+        #print ('Updated target model')
 
     def finishTrain(self):
         self.running = False
     
     def load(self, fileName):
         self.trainNet.load_params(fileName)
+        self.updateModel()
         
-    def save(self):
-        self.trainNet.save_params('snapshot/dqn_neon_%s.prm' % self.step)
+    def save(self, fileName):
+        self.trainNet.save_params(fileName)
+        

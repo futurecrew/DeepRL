@@ -48,6 +48,7 @@ class Logger(object):
     def write(self, message):
         self.terminal.write(message)
         self.log.write(message)
+        self.flush()
         
     def flush(self):
         self.terminal.flush()
