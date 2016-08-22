@@ -24,7 +24,7 @@ from model_runner_neon import ModelRunnerNeon
 from replay_memory import ReplayMemory
 
 class DeepRLPlayer:
-    def __init__(self, settings):
+    def __init__(self, settings, playFile=None):
         self.settings = settings
         self.grayPixels = np.zeros((84, 84), np.float)
         self.zeroHistory = []
@@ -42,7 +42,7 @@ class DeepRLPlayer:
         self.trainStep = 0
         self.epochDone = 0
         
-        if 'PLAY' not in self.settings:
+        if playFile is None:
             util.Logger('output')
         
         if os.path.exists('output') == False:
@@ -59,14 +59,19 @@ class DeepRLPlayer:
         
         self.printEnv()
         
-        self.initializeAle()
+        if self.settings['SHOW_SCREEN'] or playFile is not None:
+            displayScreen = True
+        else:
+            displayScreen = False
+        
+        self.initializeAle(displayScreen)
         self.initializeReplayMemory()
         self.initializeModel()
 
         self.debug = False
         DebugInput(self).start()
     
-    def initializeAle(self):
+    def initializeAle(self, displayScreen=False):
         self.ale = ALEInterface()
         
         max_frames_per_episode = self.ale.getInt("max_num_frames_per_episode");
@@ -75,7 +80,7 @@ class DeepRLPlayer:
         random_seed = self.ale.getInt("random_seed")
         print("random_seed: " + str(random_seed))
 
-        if self.settings['SHOW_SCREEN'] or 'PLAY' in self.settings:
+        if displayScreen:
             self.ale.setBool('display_screen', True)
             
         self.ale.setInt('frame_skip', settings['FRAME_SKIP'])
@@ -291,9 +296,10 @@ class DebugInput(threading.Thread):
         self.running = False
         
 
-def trainOrPlay(settings):
-    player = DeepRLPlayer(settings)
-    if 'PLAY' in settings:
+def trainOrPlay(settings, playFile=None):
+    player = DeepRLPlayer(settings, playFile)
+    if playFile is not None:
+        player.modelRunner.load(playFile + '.weight')
         player.test(0)
     else:
         player.trainStep = 0
@@ -318,6 +324,7 @@ if __name__ == '__main__':
     #game = 'enduro'
     #game = 'kung_fu_master'
     game = 'krull'
+    #game = 'seaquest'
 
     settings['ROM'] = '/media/big/download/roms/%s.bin' % game    
     settings['FRAME_SKIP'] = 4
@@ -345,11 +352,13 @@ if __name__ == '__main__':
     settings['LEARNING_RATE'] = 0.00025
     settings['RMS_DECAY'] = 0.95
     
-    #settings['PLAY'] = 'snapshot/dqn_neon_4350000.prm'    
-    #settings['PLAY'] = 'snapshot/breakout/dqn_neon_1050000.prm'
-    #settings['PLAY'] = 'snapshot/breakout/dqn_neon_3100000.prm'
-    #settings['PLAY'] = 'snapshot/dqn_neon_3600000.prm'
-    #settings['PLAY'] = 'snapshot/kung_fu_master/dqn_neon_2100000.prm'
+    playFile = None
+    #playFile = 'snapshot/dqn_neon_4350000.prm'    
+    #playFile = 'snapshot/breakout/dqn_neon_1050000.prm'
+    #playFile = 'snapshot/breakout/dqn_neon_3100000.prm'
+    #playFile = 'snapshot/dqn_neon_3600000.prm'
+    #playFile = 'snapshot/kung_fu_master/dqn_neon_2100000.prm'
+    playFile = 'snapshot/%s/%s' % (game, 'dqn_850000')
     
-    #trainOrPlay(settings)
-    retrain('snapshot/%s/%s' % (game, 'dqn_850000'))
+    trainOrPlay(settings, playFile)
+    #retrain('snapshot/%s/%s' % (game, 'dqn_850000'))

@@ -26,12 +26,6 @@ class ModelRunner():
         else:
             self.targetNet = caffe.Net(settings['TARGET_PROTOTXT'], caffe.TEST)
 
-        if 'RESTORE' in settings:
-            self.solver.restore(settings['RESTORE'])
-            self.updateModel()
-        if 'PLAY' in settings:
-            self.trainNet.copy_from(settings['PLAY'])
-
         self.replayMemory = replayMemory
         self.running = True
         self.step = 0

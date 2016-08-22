@@ -18,7 +18,6 @@ class ModelRunnerNeon():
         self.trainBatchSize = settings['TRAIN_BATCH_SIZE']
         self.discountFactor = settings['DISCOUNT_FACTOR']
         self.updateStep = settings['UPDATE_STEP']
-        self.saveStep = settings['SAVE_STEP']
         self.snapshotFolder = snapshotFolder
         self.totalTrainStep = 0
         
@@ -48,13 +47,6 @@ class ModelRunnerNeon():
                                             learning_rate=settings['LEARNING_RATE'])
 
         self.maxActionNo = maxActionNo
-        
-        if 'RESTORE' in settings:
-            self.load(settings['RESTORE'])
-            self.updateModel()
-        if 'PLAY' in settings:
-            self.load(settings['PLAY'])
-
         self.running = True
         self.blankLabel = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
 
