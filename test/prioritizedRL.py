@@ -5,16 +5,19 @@ from binaryHeap import BinaryHeap
 
 class Tester:
     def __init__(self):
-        self.totalState = 5
+        self.totalState = 10
         self.totalAction = 2
         self.epsilon = 0.1 
-        #self.stepSize = 0.25
-        self.stepSize = 0.05
+        self.stepSize = 0.25
+        #self.stepSize = 0.05
         self.discount = 1.0 - 1.0 / self.totalState
         self.maxIter = 10**6
         self.repeatNo = 10
         self.minibatch = 5
+        self.alpha = 0.7
+        self.beta = 0.5
         self.replayMemory = []
+        self.maxWeight = 0
         
         self.mode = 'FA'
         #self.mode = 'Tablar'
@@ -23,11 +26,6 @@ class Tester:
         #self.samplePolicy = 'maxPriority'
         self.samplePolicy = 'rank'
         self.binaryHeap = BinaryHeap()
-        
-        if self.samplePolicy != 'uniform':
-            self.useHeap = True
-        else:
-            self.useHeap = False
         
         print 'replay memory size : %s' % (2**(self.totalState + 1) - 2)
         
@@ -54,28 +52,28 @@ class Tester:
                 self.replayMemory.append((s, a, r, s2))
         random.shuffle(self.replayMemory)
 
-        if self.useHeap:
+        # Generate binary heap
+        rank = 1
+        rankSum = 0
+        for data in self.replayMemory:
+            self.binaryHeap.add(data, 1.0)
+            rankSum += (1.0 / rank) ** self.alpha
+            rank += 1
+        
+        self.rankIndex = []
+        segment = rankSum / self.minibatch 
+        if self.samplePolicy == 'rank':
             rank = 1
-            rankSum = 0
-            for data in self.replayMemory:
-                self.binaryHeap.add(data, 1.0)
-                rankSum += (1.0 / rank)
+            segmentRankSum = 0
+            segmentIndex = 0
+            for i in range(1, len(self.replayMemory)):
+                segmentRankSum += (1.0 / rank) ** self.alpha
                 rank += 1
-            
-            self.rankIndex = []
-            segment = rankSum / self.minibatch 
-            if self.samplePolicy == 'rank':
-                rank = 1
-                segmentRankSum = 0
-                segmentIndex = 0
-                for i in range(1, len(self.replayMemory)):
-                    segmentRankSum += (1.0 / rank)
-                    rank += 1
-                    if segmentRankSum >= segment:
-                        self.rankIndex.append(i)
-                        segmentIndex += 1
-                        segmentRankSum = 0
-                self.rankIndex.append(len(self.replayMemory) - 1)
+                if segmentRankSum >= segment:
+                    self.rankIndex.append(i)
+                    segmentIndex += 1
+                    segmentRankSum = 0
+            self.rankIndex.append(len(self.replayMemory) - 1)
         
     def getAction(self, s):
         if random.random() < self.epsilon:
@@ -157,10 +155,11 @@ class Tester:
     def sampleReplay(self, segment):
         if self.samplePolicy == 'uniform':
             index = random.randint(0, len(self.replayMemory)-1)
-            return index, self.replayMemory[index]
+            return index, 1.0, self.replayMemory[index]
         elif self.samplePolicy == 'maxPriority':
             index = 1
-            return index, self.binaryHeap.getTop()[0]
+            item = self.binaryHeap.getTop()
+            return index, 1.0, item[0]
         elif self.samplePolicy == 'rank':
             if segment == 0:
                 index1 = 1
@@ -168,10 +167,19 @@ class Tester:
                 index1 = self.rankIndex[segment-1] + 1
             index2 = self.rankIndex[segment]
             index = random.randint(index1, index2)
-            return index, self.binaryHeap.heap[index][0]
+            item = self.binaryHeap.heap[index]
+            weight = (1.0 / index / self.totalState) ** self.beta
+            
+            if weight > self.maxWeight:
+                self.maxWeight = weight
+            
+            weight / self.maxWeight
+            # DJDJ
+            #weight = 1.0
+            return index, weight, item[0]
 
     def gogoReplay(self):
-        print 'Training replay'
+        print 'Training replay : policy %s' % self.samplePolicy
 
         startTime = time.time()
         trainDone = []
@@ -182,22 +190,18 @@ class Tester:
             for i in range(self.maxIter):
                 paramSum.fill(0)
                 for m in range(self.minibatch):
-                    index, (s, a, r, s2) = self.sampleReplay(m)
+                    index, weight, (s, a, r, s2) = self.sampleReplay(m)
                     if s2 == 0:     # terminal state
                         td = r - self.getQval(s, a)
                     else:
                         td = r + self.discount * np.max(self.getQval(s2)) - self.getQval(s, a)
 
-                    self.binaryHeap
                     if self.mode == 'FA':
-                        paramSum += self.stepSize * td * self.getFeatures(s, a)
+                        paramSum += self.stepSize * weight * td * self.getFeatures(s, a)
                     else:
                         self.Qval[s, a] = self.getQval(s, a) + self.stepSize * td
             
-                    if self.samplePolicy == 'maxPriority':
-                        self.binaryHeap.reorder(1, np.abs(td))
-                    elif self.samplePolicy == 'rank':
-                        self.binaryHeap.reorder(index, np.abs(td))
+                    self.binaryHeap.reorder(index, np.abs(td))
 
                 self.params += paramSum
 
