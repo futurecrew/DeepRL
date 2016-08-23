@@ -15,9 +15,9 @@ from neon.optimizers import GradientDescentMomentum, RMSProp
 
 class ModelRunnerNeon():
     def __init__(self, settings,  maxActionNo, batchDimension, snapshotFolder):
-        self.trainBatchSize = settings['TRAIN_BATCH_SIZE']
-        self.discountFactor = settings['DISCOUNT_FACTOR']
-        self.updateStep = settings['UPDATE_STEP']
+        self.trainBatchSize = settings['train_batch_size']
+        self.discountFactor = settings['discount_factor']
+        self.updateStep = settings['update_step']
         self.snapshotFolder = snapshotFolder
         self.totalTrainStep = 0
         
@@ -43,24 +43,13 @@ class ModelRunnerNeon():
         self.targetNet.initialize(self.inputShape[:-1])
         
 
-        self.optimizer = RMSProp(decay_rate=settings['RMS_DECAY'],
-                                            learning_rate=settings['LEARNING_RATE'])
+        self.optimizer = RMSProp(decay_rate=settings['rms_decay'],
+                                            learning_rate=settings['learning_rate'])
 
         self.maxActionNo = maxActionNo
         self.running = True
         self.blankLabel = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
 
-    def __getstate__(self):
-        d = dict(self.__dict__)
-        del d['be']
-        del d['input']
-        del d['targets']
-        del d['cost']
-        del d['optimizer']
-        del d['trainNet']
-        del d['targetNet']
-        return d
-    
     def createLayers(self, maxActionNo):
         init_gauss = Gaussian(0, 0.01)
         layers = [Conv(fshape=(8, 8, 32), strides=4, init=init_gauss, activation=Rectlin()),
@@ -91,7 +80,7 @@ class ModelRunnerNeon():
         return output.T.asnumpyarray()[0]            
 
     def train(self, minibatch):
-        prestates, actions, rewards, poststates, gameOvers = minibatch
+        prestates, actions, rewards, poststates, lostLives = minibatch
         
         # Get Q*(s, a)
         self.setInput(poststates)
@@ -103,7 +92,7 @@ class ModelRunnerNeon():
         
         label = preQvalue.asnumpyarray().copy()
         for i in range(0, self.trainBatchSize):
-            if gameOvers[i]:
+            if lostLives[i]:
                 label[actions[i], i] = self.clipReward(rewards[i])
             else:
                 label[actions[i], i] = self.clipReward(rewards[i]) + self.discountFactor* np.max(postQvalue[i])

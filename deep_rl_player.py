@@ -1,14 +1,7 @@
 #!/usr/bin/env python
 
-# ale_python_test_pygame_player.py
-# Author: Ben Goodrich
-#
-# This modified ale_python_test_pygame.py to provide a fully interactive experience allowing the game_player
-# to play. RAM Contents, current action, and reward are also displayed.
-# keys are:
-# arrow keys -> up/down/left/right
-# z -> fire button
-import sys
+# deep_rl_player.py
+# Author: Daejoong Kim
 import os
 from ale_python_interface import ALEInterface
 import numpy as np
@@ -33,24 +26,24 @@ class DeepRLPlayer:
 
         #self.sendQueue = multiprocessing.Queue()
         
-        self.batchDimension = (settings['TRAIN_BATCH_SIZE'], 
-                                      settings['SCREEN_HISTORY'],
-                                      settings['SCREEN_HEIGHT'], 
-                                      settings['SCREEN_WIDTH'])
+        self.batchDimension = (self.settings['train_batch_size'], 
+                                      self.settings['screen_history'],
+                                      self.settings['screen_height'], 
+                                      self.settings['screen_width'])
 
         self.historyBuffer = np.zeros(self.batchDimension, dtype=np.float32)
         self.trainStep = 0
         self.epochDone = 0
         
         if playFile is None:
-            util.Logger('output')
+            util.Logger('output', settings['game'])
         
         if os.path.exists('output') == False:
             os.makedirs('output')
         if os.path.exists('snapshot') == False:
             os.makedirs('snapshot')
             
-        gameFolder = settings['ROM'].split('/')[-1]
+        gameFolder = self.settings['rom'].split('/')[-1]
         if '.' in gameFolder:
             gameFolder = gameFolder.split('.')[0]
         self.snapshotFolder = 'snapshot/' + gameFolder
@@ -59,7 +52,7 @@ class DeepRLPlayer:
         
         self.printEnv()
         
-        if self.settings['SHOW_SCREEN'] or playFile is not None:
+        if self.settings['show_screen'] or playFile is not None:
             displayScreen = True
         else:
             displayScreen = False
@@ -83,11 +76,12 @@ class DeepRLPlayer:
         if displayScreen:
             self.ale.setBool('display_screen', True)
             
-        self.ale.setInt('frame_skip', settings['FRAME_SKIP'])
+        # DJDJ
+        #self.ale.setInt('frame_skip', self.settings['frame_repeat'])
         self.ale.setFloat('repeat_action_probability', 0)
         self.ale.setBool('color_averaging', True)
         
-        self.ale.loadROM(settings['ROM'])
+        self.ale.loadROM(self.settings['rom'])
         self.legalActions = self.ale.getMinimalActionSet()
         print 'legalActions: %s' % self.legalActions
         
@@ -100,7 +94,7 @@ class DeepRLPlayer:
         ram = np.zeros((ram_size),dtype=np.uint8)    
 
     def initializeReplayMemory(self):
-        self.replayMemory = ReplayMemory(self.settings['MAX_REPLAY_MEMORY'], self.settings)
+        self.replayMemory = ReplayMemory(self.settings['max_replay_memory'], self.settings)
         
     def initializeModel(self):
         #self.modelRunner = ModelRunner(
@@ -118,7 +112,7 @@ class DeepRLPlayer:
     
     def getActionFromModel(self, mode):
         if mode == 'TEST':
-            greedyEpsilon = self.settings['TEST_EPSILON']
+            greedyEpsilon = self.settings['test_epsilon']
         else:
             if self.trainStep * 4 <= 10**6:
                 greedyEpsilon = 1.0 - 0.9 / 10**6 * self.trainStep * 4
@@ -150,44 +144,56 @@ class DeepRLPlayer:
         self.historyBuffer[0, :-1] = self.historyBuffer[0, 1:]
         self.historyBuffer[0, -1] = state
 
+    def doActions(self, actionIndex):
+        action = self.legalActions[actionIndex]
+        
+        #if (self.debug):
+        #    print 'epsilon : %.2f, action : %s, %s' % (greedyEpsilon, action, type)
+            
+        reward = 0
+        lostLife = False 
+        lives = self.ale.lives()
+        for f in range(self.settings['frame_repeat']):
+            reward += self.ale.act(action)
+            gameOver = self.ale.game_over()
+            if self.ale.lives() < lives or gameOver:
+                lostLife = True
+                break
+        state = self.getScreenPixels()
+        
+        return reward, state, lostLife, gameOver
+
     def generateReplayMemory(self, count):
         print 'Generating %s replay memory' % count
         self.resetGame()
         for i in range(count):
             actionIndex, greedyEpsilon, type = self.getActionFromModel('TRAIN')
-            action = self.legalActions[actionIndex]
             
-            reward = self.ale.act(action)
-            state = self.getScreenPixels()
+            reward, state, lostLife, gameOver = self.doActions(actionIndex)
 
-            self.replayMemory.add(actionIndex, reward, state, self.ale.game_over())
+            self.replayMemory.add(actionIndex, reward, state, lostLife)
                 
             self.addToHistoryBuffer(state)
                 
-            if(self.ale.game_over()):
+            if(gameOver):
                 self.resetGame()
         
     def test(self, epoch):
-        episode = 0
+        episode = 1
         totalReward = 0
         testStartTime = time.time()
         self.resetGame()
         
-        for stepNo in range(self.settings['TEST_STEP']):
+        for stepNo in range(self.settings['test_step']):
             actionIndex, greedyEpsilon, actionType = self.getActionFromModel('TEST')
-            action = self.legalActions[actionIndex]
-            
-            if (self.debug):
-                print 'epsilon : %.2f, action : %s, %s' % (greedyEpsilon, action, actionType)
                 
-            reward = self.ale.act(action)
+            reward, state, lostLife, gameOver = self.doActions(actionIndex)
+                
             totalReward += reward
-            
-            state = self.getScreenPixels()
 
             self.addToHistoryBuffer(state)
             
-            if(self.ale.game_over()):
+            if(gameOver):
                 episode += 1
                 self.resetGame()
                  
@@ -198,12 +204,12 @@ class DeepRLPlayer:
                   
     def train(self, replayMemoryNo=None):
         if replayMemoryNo == None:
-            replayMemoryNo = self.settings['TRAIN_START']
+            replayMemoryNo = self.settings['train_start']
         self.generateReplayMemory(replayMemoryNo)
         
         print 'Start training'
         
-        for epoch in range(self.epochDone + 1, self.settings['MAX_EPOCH'] + 1):
+        for epoch in range(self.epochDone + 1, self.settings['max_epoch'] + 1):
             epochTotalReward = 0
             episodeTotalReward = 0
             epochStartTime = time.time()
@@ -211,32 +217,27 @@ class DeepRLPlayer:
             self.resetGame()
             episode = 1
 
-            for stepNo in range(self.settings['EPOCH_STEP']):
+            for stepNo in range(self.settings['epoch_step']):
                 actionIndex, greedyEpsilon, type = self.getActionFromModel('TRAIN')
-                action = self.legalActions[actionIndex]
                 
-                if (self.debug):
-                    print 'epsilon : %.2f, action : %s, %s' % (greedyEpsilon, action, type)
-                    
-                reward = self.ale.act(action)
+                reward, state, lostLife, gameOver = self.doActions(actionIndex)
+
                 episodeTotalReward += reward
                 epochTotalReward += reward
-                
-                state = self.getScreenPixels()
 
-                self.replayMemory.add(actionIndex, reward, state, self.ale.game_over())
+                self.replayMemory.add(actionIndex, reward, state, lostLife)
                     
-                if stepNo % self.settings['TRAIN_STEP'] == 0:
+                if stepNo % self.settings['train_step'] == 0:
                     minibatch = self.replayMemory.getMinibatch()
                     self.modelRunner.train(minibatch)
                     self.trainStep += 1
                 
-                    if self.trainStep % self.settings['SAVE_STEP'] == 0:
+                    if self.trainStep % self.settings['save_step'] == 0:
                         self.save()
                      
                 self.addToHistoryBuffer(state)
                 
-                if self.ale.game_over():
+                if gameOver:
                     if episode % 50 == 0:
                         print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s" % (
                                                                                 episode, episodeTotalReward,
@@ -319,46 +320,46 @@ def retrain(saveFile):
 if __name__ == '__main__':    
     settings = {}
 
-    #game = 'breakout'
-    #game = 'space_invaders'
-    #game = 'enduro'
-    #game = 'kung_fu_master'
-    game = 'krull'
-    #game = 'seaquest'
+    #settings['game'] = 'breakout'
+    #settings['game'] = 'space_invaders'
+    #settings['game'] = 'enduro'
+    #settings['game'] = 'kung_fu_master'
+    #settings['game'] = 'krull'
+    settings['game'] = 'seaquest'
 
-    settings['ROM'] = '/media/big/download/roms/%s.bin' % game    
-    settings['FRAME_SKIP'] = 4
+    settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']    
+    settings['frame_repeat'] = 4
 
-    #settings['SHOW_SCREEN'] = True
-    settings['SHOW_SCREEN'] = False
-    settings['USE_KEYBOARD'] = False
-    settings['SOLVER_PROTOTXT'] = 'models/solver2.prototxt'
-    settings['TARGET_PROTOTXT'] = 'models/target2.prototxt'
-    settings['TRAIN_BATCH_SIZE'] = 32
-    settings['MAX_REPLAY_MEMORY'] = 1000000
-    settings['MAX_EPOCH'] = 200
-    settings['EPOCH_STEP'] = 250000
-    settings['DISCOUNT_FACTOR'] = 0.99
-    settings['UPDATE_STEP'] = 10000               # Copy train network into target network every this train step
-    settings['TRAIN_START'] = 50000                 # Start training after filling this replay memory size
-    settings['TRAIN_STEP'] = 4                            # Train every this screen step
-    settings['TEST_STEP'] = 50000                      # Test for this number of steps
-    settings['TEST_EPSILON'] = 0.05                   # Greed epsilon for test
-    settings['SAVE_STEP'] = 50000                     # Save result every this training step
-    settings['SCREEN_WIDTH'] = 84
-    settings['SCREEN_HEIGHT'] = 84
-    settings['SCREEN_HISTORY'] = 4
-
-    settings['LEARNING_RATE'] = 0.00025
-    settings['RMS_DECAY'] = 0.95
+    #settings['show_screen'] = True
+    settings['show_screen'] = False
+    settings['use_keyboard'] = False
+    settings['solver_prototxt'] = 'models/solver2.prototxt'
+    settings['target_prototxt'] = 'models/target2.prototxt'
+    settings['train_batch_size'] = 32
+    settings['max_replay_memory'] = 1000000
+    settings['max_epoch'] = 200
+    settings['epoch_step'] = 250000
+    settings['discount_factor'] = 0.99
+    settings['update_step'] = 10000               # Copy train network into target network every this train step
+    settings['train_start'] = 50000                   # Start training after filling this replay memory size
+    settings['train_step'] = 4                            # Train every this screen step
+    settings['test_step'] = 50000                     # Test for this number of steps
+    settings['test_epsilon'] = 0.05                   # Greed epsilon for test
+    settings['save_step'] = 50000                    # Save result every this training step
+    settings['screen_width'] = 84
+    settings['screen_height'] = 84
+    settings['screen_history'] = 4
+    settings['learning_rate'] = 0.00025
+    settings['rms_decay'] = 0.95
     
-    playFile = None
-    #playFile = 'snapshot/dqn_neon_4350000.prm'    
-    #playFile = 'snapshot/breakout/dqn_neon_1050000.prm'
-    #playFile = 'snapshot/breakout/dqn_neon_3100000.prm'
-    #playFile = 'snapshot/dqn_neon_3600000.prm'
-    #playFile = 'snapshot/kung_fu_master/dqn_neon_2100000.prm'
-    playFile = 'snapshot/%s/%s' % (game, 'dqn_850000')
+    dataFile = None
     
-    trainOrPlay(settings, playFile)
-    #retrain('snapshot/%s/%s' % (game, 'dqn_850000'))
+    #dataFile = 'snapshot/dqn_neon_4350000.prm'    
+    #dataFile = 'snapshot/breakout/dqn_neon_1050000.prm'
+    #dataFile = 'snapshot/breakout/dqn_neon_3100000.prm'
+    #dataFile = 'snapshot/dqn_neon_3600000.prm'
+    #dataFile = 'snapshot/kung_fu_master/dqn_neon_2100000.prm'
+    #dataFile = 'snapshot/%s/%s' % (settings['game'], 'dqn_850000')
+    
+    trainOrPlay(settings, dataFile)
+    #retrain(dataFile)

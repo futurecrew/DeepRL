@@ -8,23 +8,23 @@ import multiprocessing
 
 class ModelRunner():
     def __init__(self, settings,  maxActionNo, replayMemory, caffemodel = None):
-        self.trainBatchSize = settings['TRAIN_BATCH_SIZE']
-        self.discountFactor = settings['DISCOUNT_FACTOR']
-        self.updateStep = settings['UPDATE_STEP']
-        self.maxReplayMemory = settings['MAX_REPLAY_MEMORY']
+        self.trainBatchSize = settings['train_batch_size']
+        self.discountFactor = settings['discount_factor']
+        self.updateStep = settings['update_step']
+        self.maxReplayMemory = settings['max_replay_memory']
         
         caffe.set_mode_gpu()
         
         # Train
-        self.solver = caffe.SGDSolver(settings['SOLVER_PROTOTXT'])
+        self.solver = caffe.SGDSolver(settings['solver_prototxt'])
         self.trainNet = self.solver.net
         self.maxActionNo = maxActionNo
         
         # Test
         if caffemodel != None:
-            self.targetNet = caffe.Net(settings['TARGET_PROTOTXT'], caffemodel, caffe.TEST)
+            self.targetNet = caffe.Net(settings['target_prototxt'], caffemodel, caffe.TEST)
         else:
-            self.targetNet = caffe.Net(settings['TARGET_PROTOTXT'], caffe.TEST)
+            self.targetNet = caffe.Net(settings['target_prototxt'], caffe.TEST)
 
         self.replayMemory = replayMemory
         self.running = True
