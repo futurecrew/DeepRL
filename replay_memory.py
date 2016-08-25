@@ -1,33 +1,33 @@
+# Original code from Tambet Matiisen (https://github.com/tambetm/simple_dqn)
+
 import numpy as np
 import random
 import logging
 logger = logging.getLogger(__name__)
 
 class ReplayMemory:
-  def __init__(self, size, args):
+  def __init__(self, size, batchSize, historyNo, width, height):
     self.size = size
     # preallocate memory
     self.actions = np.empty(self.size, dtype = np.uint8)
     self.rewards = np.empty(self.size, dtype = np.integer)
-    self.screens = np.empty((self.size, args['screen_height'], args['screen_width']), dtype = np.uint8)
+    self.screens = np.empty((self.size, height, width), dtype = np.uint8)
     self.terminals = np.empty(self.size, dtype = np.bool)
-    self.history_length = args['screen_history']
-    self.dims = (args['screen_height'], args['screen_width'])
-    self.batch_size = args['train_batch_size']
+    self.history_length = historyNo
+    self.dims = (height, width)
+    self.batch_size = batchSize
     self.count = 0
     self.current = 0
 
     # pre-allocate prestates and poststates for minibatch
-    # DJDJ
     self.prestates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.uint8)
     self.poststates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.uint8)
-    #self.prestates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.float32)
-    #self.poststates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.float32)
 
     logger.info("Replay memory size: %d" % self.size)
 
   def add(self, action, reward, screen, terminal):
     assert screen.shape == self.dims
+    addedIndex = self.current
     # NB! screen is post-state, after action and reward
     self.actions[self.current] = action
     self.rewards[self.current] = reward
@@ -36,6 +36,8 @@ class ReplayMemory:
     self.count = max(self.count, self.current + 1)
     self.current = (self.current + 1) % self.size
     #logger.debug("Memory count %d" % self.count)
+    
+    return addedIndex
   
   def getState(self, index):
     assert self.count > 0, "replay memory is empy, use at least --random_steps 1"
@@ -71,11 +73,39 @@ class ReplayMemory:
         break
       
       # NB! having index first is fastest in C-order matrices
-      # DJDJ
       self.prestates[len(indexes), ...] = self.getState(index - 1)
       self.poststates[len(indexes), ...] = self.getState(index)
-      #self.prestates[len(indexes), ...] = self.getState(index - 1) / 255.0
-      #self.poststates[len(indexes), ...] = self.getState(index) / 255.0
+      indexes.append(index)
+
+    # copy actions, rewards and terminals with direct slicing
+    actions = self.actions[indexes]
+    rewards = self.rewards[indexes]
+    terminals = self.terminals[indexes]
+    return self.prestates, actions, rewards, self.poststates, terminals
+
+  def getMinibatchSegment(self, segmentList):
+    # memory must include poststate, prestate and history
+    assert self.count > self.history_length
+    # sample random indexes
+    indexes = []
+    while len(indexes) < self.batch_size:
+      # find random index 
+      while True:
+        # sample one index (ignore states wraping over 
+        index = random.randint(self.history_length, self.count - 1)
+        # if wraps over current pointer, then get new one
+        if index >= self.current and index - self.history_length < self.current:
+          continue
+        # if wraps over episode end, then get new one
+        # NB! poststate (last screen) can be terminal state!
+        if self.terminals[(index - self.history_length):index].any():
+          continue
+        # otherwise use this index
+        break
+      
+      # NB! having index first is fastest in C-order matrices
+      self.prestates[len(indexes), ...] = self.getState(index - 1)
+      self.poststates[len(indexes), ...] = self.getState(index)
       indexes.append(index)
 
     # copy actions, rewards and terminals with direct slicing

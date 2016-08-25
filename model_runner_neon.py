@@ -14,11 +14,11 @@ from neon.transforms import SumSquared
 from neon.optimizers import GradientDescentMomentum, RMSProp
 
 class ModelRunnerNeon():
-    def __init__(self, settings,  maxActionNo, batchDimension, snapshotFolder):
+    def __init__(self, settings,  maxActionNo, batchDimension):
+        self.settings = settings
         self.trainBatchSize = settings['train_batch_size']
         self.discountFactor = settings['discount_factor']
         self.updateStep = settings['update_step']
-        self.snapshotFolder = snapshotFolder
         self.totalTrainStep = 0
         
         self.be = gen_backend(backend='gpu',             
@@ -82,11 +82,15 @@ class ModelRunnerNeon():
     def train(self, minibatch):
         prestates, actions, rewards, poststates, lostLives = minibatch
         
-        # Get Q*(s, a)
+        # Get Q*(s, a) with targetNet
         self.setInput(poststates)
         postQvalue = self.targetNet.fprop(self.input, inference=True).T.asnumpyarray()
         
-        # Get Q(s, a)
+        if self.settings['double_dqn'] == True:
+            # Get Q*(s, a) with trainNet
+            postQvalue2 = self.trainNet.fprop(self.input, inference=True).T.asnumpyarray()
+        
+        # Get Q(s, a) with trainNet
         self.setInput(prestates)
         preQvalue = self.trainNet.fprop(self.input, inference=False)
         
@@ -95,18 +99,19 @@ class ModelRunnerNeon():
             if lostLives[i]:
                 label[actions[i], i] = self.clipReward(rewards[i])
             else:
-                label[actions[i], i] = self.clipReward(rewards[i]) + self.discountFactor* np.max(postQvalue[i])
+                if self.settings['double_dqn'] == True:
+                    maxIndex = np.argmax(postQvalue2[i])
+                    label[actions[i], i] = self.clipReward(rewards[i]) + self.discountFactor* postQvalue[i][maxIndex]
+                else:
+                    label[actions[i], i] = self.clipReward(rewards[i]) + self.discountFactor* np.max(postQvalue[i])
 
         # copy targets to GPU memory
         self.targets.set(label)
     
         delta = self.cost.get_errors(preQvalue, self.targets)
-
-        # DJDJ
         self.be.clip(delta, -1.0, 1.0, out = delta)
         
         self.trainNet.bprop(delta)
-
         self.optimizer.optimize(self.trainNet.layers_to_optimize, epoch=0)
 
         self.totalTrainStep += 1

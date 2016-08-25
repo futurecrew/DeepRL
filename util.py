@@ -1,11 +1,9 @@
 import sys
-import time
 
 class Logger(object):
-    def __init__(self, folder, gameName):
-        filename="%s/%s_%s.log" % (folder, gameName, time.strftime('%Y%m%d_%H%M%S'))
+    def __init__(self, logFile):
         self.terminal = sys.stdout
-        self.log = open(filename, "w")
+        self.log = open(logFile, "w")
         
         sys.stdout = self
         sys.stderr = self
