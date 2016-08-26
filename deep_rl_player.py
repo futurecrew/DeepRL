@@ -15,6 +15,7 @@ import util
 #from model_runner import ModelRunner
 from model_runner_neon import ModelRunnerNeon
 from replay_memory import ReplayMemory
+from rank_manager import RankManager
 
 class DeepRLPlayer:
     def __init__(self, settings, playFile=None):
@@ -94,7 +95,14 @@ class DeepRLPlayer:
         ram = np.zeros((ram_size),dtype=np.uint8)    
 
     def initializeReplayMemory(self):
-        self.replayMemory = ReplayMemory(self.settings['max_replay_memory'], 
+        if 'prioritized_replay' in self.settings and self.settings['prioritized_replay'] == True:
+            self.replayMemory = RankManager(self.settings['max_replay_memory'], 
+                                         self.settings['train_batch_size'],
+                                         self.settings['screen_history'],
+                                         self.settings['screen_width'],
+                                         self.settings['screen_height'])
+        else:
+            self.replayMemory = ReplayMemory(self.settings['max_replay_memory'], 
                                          self.settings['train_batch_size'],
                                          self.settings['screen_history'],
                                          self.settings['screen_width'],
@@ -181,6 +189,7 @@ class DeepRLPlayer:
     
     def generateReplayMemory(self, count):
         print 'Generating %s replay memory' % count
+        startTime = time.time()
         self.resetGame()
         for i in range(count):
             actionIndex, greedyEpsilon, type = self.getActionFromModel('TRAIN')
@@ -194,25 +203,37 @@ class DeepRLPlayer:
             if(gameOver):
                 self.resetGame()
         
+        print 'Genrating took %.0f sec' % (time.time() - startTime)
+        
     def test(self, epoch):
-        episode = 1
+        episode = 0
         totalReward = 0
         testStartTime = time.time()
         self.resetGame()
         
+        episodeReward = 0
         for stepNo in range(self.settings['test_step']):
             actionIndex, greedyEpsilon, actionType = self.getActionFromModel('TEST')
                 
             reward, state, lostLife, gameOver = self.doActions(actionIndex)
                 
-            totalReward += reward
+            episodeReward += reward
 
             self.addToHistoryBuffer(state)
             
             if(gameOver):
                 episode += 1
+                totalReward += episodeReward
                 self.resetGame()
-                 
+                episodeReward = 0
+            
+                if self.debug:
+                    print "[ Test  %s ] %s steps, avg score: %.1f. ep: %d, elapsed: %.0fs. last e: %.2f" % \
+                          (epoch, stepNo, float(totalReward) / episode, episode, 
+                           time.time() - testStartTime,
+                           greedyEpsilon)
+        
+        episode = max(episode, 1)          
         print "[ Test  %s ] avg score: %.1f. elapsed: %.0fs. last e: %.2f" % \
               (epoch, float(totalReward) / episode, 
                time.time() - testStartTime,
@@ -245,7 +266,7 @@ class DeepRLPlayer:
                     
                 if stepNo % self.settings['train_step'] == 0:
                     minibatch = self.replayMemory.getMinibatch()
-                    self.modelRunner.train(minibatch)
+                    self.modelRunner.train(minibatch, self.replayMemory)
                     self.trainStep += 1
                 
                     if self.trainStep % self.settings['save_step'] == 0:
@@ -321,6 +342,7 @@ class DebugInput(threading.Thread):
 def trainOrPlay(settings, playFile=None):
     player = DeepRLPlayer(settings, playFile)
     if playFile is not None:
+        print 'Play using dataFile: %s' % dataFile
         player.modelRunner.load(playFile + '.weight')
         player.test(0)
     else:
@@ -364,7 +386,7 @@ if __name__ == '__main__':
     settings['update_step'] = 10000               # Copy train network into target network every this train step
     settings['train_start'] = 50000                   # Start training after filling this replay memory size
     settings['train_step'] = 4                            # Train every this screen step
-    settings['test_step'] = 50000                     # Test for this number of steps
+    settings['test_step'] = 125000                   # Test for this number of steps
     settings['test_epsilon'] = 0.05                   # Greed epsilon for test
     settings['save_step'] = 50000                    # Save result every this training step
     settings['screen_width'] = 84
@@ -373,17 +395,23 @@ if __name__ == '__main__':
     settings['learning_rate'] = 0.00025
     settings['rms_decay'] = 0.95
     settings['double_dqn'] = False
+    settings['prioritized_replay'] = False
 
-    # Tuned double dqn hyper params
+    # Double DQN hyper params
     settings['double_dqn'] = True
     settings['train_min_epsilon'] = 0.01
     settings['test_epsilon'] = 0.001
     settings['update_step'] = 30000
+
+    # Prioritized experience replay params
+    settings['prioritized_replay'] = True
+    settings['learning_rate'] = 0.00025 / 4
+    settings['prioritized_mode'] = 'RANK'
     
     
     dataFile = None    
     #dataFile = 'snapshot/breakout/dqn_neon_3100000.prm'
-    #dataFile = 'snapshot/%s/%s' % (settings['game'], 'dqn_500000')
+    #dataFile = 'snapshot/%s/%s' % (settings['game'], '20160825_075716/dqn_1900000')
     
     trainOrPlay(settings, dataFile)
     #retrain(dataFile)

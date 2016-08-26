@@ -79,8 +79,11 @@ class ModelRunnerNeon():
         output  = self.trainNet.fprop(self.input, inference=True)
         return output.T.asnumpyarray()[0]            
 
-    def train(self, minibatch):
-        prestates, actions, rewards, poststates, lostLives = minibatch
+    def train(self, minibatch, replayMemory):
+        if self.settings['prioritized_replay'] == True:
+            prestates, actions, rewards, poststates, lostLives, replayIndexes, heapIndexes, weights = minibatch
+        else:
+            prestates, actions, rewards, poststates, lostLives = minibatch
         
         # Get Q*(s, a) with targetNet
         self.setInput(poststates)
@@ -109,6 +112,17 @@ class ModelRunnerNeon():
         self.targets.set(label)
     
         delta = self.cost.get_errors(preQvalue, self.targets)
+        
+        if self.settings['prioritized_replay'] == True:
+            deltaValue = delta.asnumpyarray()
+            for i in range(self.trainBatchSize):
+                replayMemory.updateWeight(heapIndexes[i], abs(deltaValue[actions[i], i]))
+                deltaValue[actions[i], i] = weights[i] * deltaValue[actions[i], i]
+            delta.set(deltaValue.copy())
+            
+            if self.totalTrainStep % 10**6 == 0:
+                replayMemory.sort()
+        
         self.be.clip(delta, -1.0, 1.0, out = delta)
         
         self.trainNet.bprop(delta)

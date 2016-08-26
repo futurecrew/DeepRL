@@ -1,5 +1,6 @@
 import sys
 import random
+import time
 import numpy as np
 import unittest
 from rank_manager import RankManager
@@ -17,7 +18,7 @@ class TestRankManager(unittest.TestCase):
         totalList = [5, 10, 15, 100]
         
         for dataLen in totalList:
-            print 'dataLen : %s' % dataLen
+            #print 'dataLen : %s' % dataLen
             manager = RankManager(self.replayMemorySize, 32, 4, 84, 84)
             for i in range(dataLen):
                 state = np.zeros((84, 84), dtype=np.int)
@@ -26,6 +27,7 @@ class TestRankManager(unittest.TestCase):
 
             dataLen2 = min(dataLen, self.replayMemorySize)            
             self.assertEqual(manager.getLength(), dataLen2)
+            self.assertEqual(manager.count, dataLen2)
                 
             for replayIndex in range(dataLen2):
                 heapIndex = manager.heapIndexList[replayIndex]
@@ -33,8 +35,8 @@ class TestRankManager(unittest.TestCase):
                 self.assertEqual(replayIndex, heapItem[0])
     
     def test_GetMinibatch(self):    
-        replayMemorySize = 1000
-        dataLen = 2200
+        replayMemorySize = 100000
+        dataLen = 220000
         minibatchSize = 32
         manager = RankManager(replayMemorySize, minibatchSize, 4, 84, 84)
         for i in range(dataLen):
@@ -56,8 +58,8 @@ class TestRankManager(unittest.TestCase):
         print 'replayIndexes : %s' % replayIndexes
     
     def test_Sort(self):
-        replayMemorySize = 1000
-        dataLenList = [100, 1000, 2000, 2200]
+        replayMemorySize = 10**6
+        dataLenList = [100, 1000, 2000, 10**6]
         for dataLen in dataLenList:
             minibatchSize = 32
             manager = RankManager(replayMemorySize, minibatchSize, 4, 84, 84)
@@ -125,7 +127,40 @@ class TestRankManager(unittest.TestCase):
                 self.assertGreaterEqual(heapIndex, newHeapIndex)
 
             self.checkHeapIndexListValidity(manager)
-        
+
+    def atest_CalculateSegments(self):
+        replayMemorySize = 10**6
+        dataLenList = [50000, 100000, 200000, 300000, 400000, 500000, 600000, 700000, 800000, 900000, 1000000]
+        for dataLen in dataLenList:
+            minibatchSize = 32
+            manager = RankManager(replayMemorySize, minibatchSize, 4, 84, 84)
+            
+            time1 = time.time()
+            for i in range(dataLen):
+                state = np.zeros((84, 84), dtype=np.int)
+                state.fill(i)
+                manager.add(action=0, reward=0, screen=state, terminal=0, weight=i)
+    
+            time2 = time.time()
+            manager.calculateSegments()
+            time3 = time.time()
+            
+            print 'Adding %d took %.1f sec.' % (dataLen, time2 - time1)
+            print 'Calculating segments took %.1f sec.' % (time3 - time2)
+
+    def test_GetSegments(self):
+        replayMemorySize = 10**6
+        minibatchSize = 32
+        manager = RankManager(replayMemorySize, minibatchSize, 4, 84, 84)
+        for i in range(10**6):
+            state = np.zeros((84, 84), dtype=np.int)
+            state.fill(i)
+            manager.add(action=0, reward=0, screen=state, terminal=0, weight=i)
+            segmentIndex = manager.getSegments()
+            
+            if i % 100000 == 0:
+                print 'segmentIndex : %s' % segmentIndex
+            
         
 if __name__ == '__main__':
     unittest.main()
