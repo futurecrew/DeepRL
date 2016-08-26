@@ -2,30 +2,34 @@ import random
 from replay_memory import ReplayMemory
 import numpy as np
 
-class RankManager:
-    def __init__(self, size, batchSize, historyLen, width, height):
+class SamplingManager:
+    def __init__(self, size, batchSize, historyLen, width, height, samplingMode,
+                            samplingAlpha, samplingBeta):
         self.batchSize = batchSize
         self.historyLen = historyLen
+        self.samplingMode = samplingMode
+        self.alpha = samplingAlpha
+        self.beta = samplingBeta
         self.replayMemory = ReplayMemory(size, batchSize, historyLen, width, height)
         self.heapIndexList = [-1] * size        # This list maps replayIndex to heapIndex
         self.heap = []                                     # Binary heap
         self.heap.append((None, None))
-        self.alpha = 0.7
-        self.beta = 0.5
-        self.maxWeight = 0
-        self.newWeight = 100
+        self.proportionEpsilon = 0.0000001
+        self.maxWeight= 0
+        self.maxTD = 1.0
         # pre-allocate prestates and poststates for minibatch
         self.prestates = np.empty((batchSize, historyLen, height, width), dtype = np.uint8)
         self.poststates = np.empty((batchSize, historyLen, height, width), dtype = np.uint8)
-        self.rankSegmentIndex = {}              # heap indexes for each segment
+        self.segmentIndex = {}              # heap indexes for each segment
+        self.addCallNo = 0
 
     @property
     def count(self):
         return self.replayMemory.count
 
-    def add(self, action, reward, screen, terminal, weight=None):
-        if weight == None:
-            weight = self.newWeight
+    def add(self, action, reward, screen, terminal, td=None):
+        if td == None:
+            td = self.maxTD
         addedReplayIndex = self.replayMemory.add(action, reward, screen, terminal)
 
         # If there was the same data then remove it first
@@ -33,19 +37,29 @@ class RankManager:
         if heapIndex != -1:
             self.remove(heapIndex)
         
-        item = (addedReplayIndex, weight)
+        item = (addedReplayIndex, td)
         self.heap.append(item)
         childIndex = len(self.heap) - 1
         self.heapIndexList[addedReplayIndex] = childIndex
         self.reorderUpward(childIndex)
         
+        self.addCallNo += 1
+        
+        if self.addCallNo % (10**5) == 0:     # Clear segmentIndex to calculate segment again
+            self.segmentIndex = {}
+        if self.addCallNo % (10**6) == 0:
+            self.sort()
+        
     def remove(self, index):
         lastIndex = len(self.heap) - 1
         self.heapIndexList[self.heap[index][0]] = -1
-        self.heap[index] = self.heap[lastIndex]
-        self.heapIndexList[self.heap[index][0]] = index
-        self.heap.pop(lastIndex)
-        self.reorder(index)
+        if index == lastIndex:
+            self.heap.pop(lastIndex)
+        else:
+            self.heap[index] = self.heap[lastIndex]
+            self.heapIndexList[self.heap[index][0]] = index
+            self.heap.pop(lastIndex)
+            self.reorder(index)
         
     def getTop(self):
         return self.heap[1]
@@ -53,7 +67,7 @@ class RankManager:
     def get(self, index):
         return self.heap[index]
     
-    def getLength(self):
+    def getHeapLength(self):
         return len(self.heap) - 1
     
     def swap(self, index1, item1, index2, item2):
@@ -139,9 +153,13 @@ class RankManager:
         
         for i in range(1, heapSize):
             self.heapIndexList[self.heap[i][0]] = i
+            
+        self.segmentIndex = {}
         
-    def updateWeight(self, heapIndex, weight):
-        self.reorder(heapIndex, weight)
+    def updateTD(self, heapIndex, td):
+        if td > self.maxTD:
+            self.maxTD = td
+        self.reorder(heapIndex, td)
     
     def getSegments(self):
         dataLen = len(self.heap) - 1
@@ -149,53 +167,61 @@ class RankManager:
         if segment == 0:       # If data len is less than necessary size then use uniform segments
             return None
         else:
-            if segment not in self.rankSegmentIndex:
-                self.rankSegmentIndex[segment] = self.calculateSegments(segment)
-            return self.rankSegmentIndex[segment]
+            if segment not in self.segmentIndex:
+                self.segmentIndex[segment] = self.calculateSegments(segment)
+            return self.segmentIndex[segment]
 
+    def getP(self, heapIndex):
+        if self.samplingMode == 'RANK':
+            return (1.0 / heapIndex) ** self.alpha
+        elif self.samplingMode == 'PROPORTION':
+            return (abs(self.heap[heapIndex][1]) + self.proportionEpsilon) ** self.alpha
+        
     def calculateSegments(self, dataLen=None):
         if dataLen == None:
             dataLen = len(self.heap)
             
-        rankSum = 0
-        for i in range(dataLen):
-            rankSum += (1.0 / (i + 1)) ** self.alpha
-
-        segment = rankSum / self.batchSize
-        segmentRankSum = 0
-        segmentNo = 1
-        rankSegmentIndex = []
+        self.totalPSum = 0
         for i in range(1, dataLen):
-            segmentRankSum += (1.0 / i) ** self.alpha
-            if segmentRankSum >= segment * segmentNo:
-                rankSegmentIndex.append(i)
+            self.totalPSum += self.getP(i)
+
+        segment = self.totalPSum / self.batchSize
+        segmentSum = 0
+        segmentNo = 1
+        segmentIndex = []
+        for i in range(1, dataLen):
+            segmentSum += self.getP(i)
+            if segmentSum >= segment * segmentNo:
+                segmentIndex.append(i)
                 segmentNo += 1
-        rankSegmentIndex.append(len(self.heap) - 1)
+                if len(segmentIndex) == self.batchSize - 1:
+                    segmentIndex.append(len(self.heap) - 1)
+                    break
         
         """
         for i in range(len(self.heap)):
             print 'self.heap[%s] : %s, %s' % (i, self.heap[i][0], self.heap[i][1])
-        print 'rankSegmentIndex : %s' % rankSegmentIndex
+        print 'segmentIndex : %s' % segmentIndex
         """
-        return rankSegmentIndex
-                
+        return segmentIndex
+            
     def getMinibatch(self):
-        rankSegmentIndex = self.getSegments()
+        segmentIndex = self.getSegments()
         
         # sample random indexes
         indexes = []
         heapIndexes = []
-        weightList = []        
+        weights = []        
         for segment in range(self.batchSize):
-            if rankSegmentIndex == None:
+            if segmentIndex == None:
                     index1 = 1
-                    index2 = self.count - 1
+                    index2 = self.count
             else:
                 if segment == 0:
                     index1 = 1
                 else:
-                    index1 = rankSegmentIndex[segment-1] + 1
-                index2 = rankSegmentIndex[segment]
+                    index1 = segmentIndex[segment-1] + 1
+                index2 = segmentIndex[segment]
 
             # find index 
             while True:
@@ -214,17 +240,17 @@ class RankManager:
                     repeatAgain = True
                 
                 if repeatAgain:
-                    index1 = 1
-                    index2 = self.count - 1
+                    self.reorder(heapIndex, 0)         # Discard and never use this data again
                     continue            
 
-                # otherwise use this index
-                weight = (1.0 / heapIndex / len(self.heap)) ** self.beta
-                if weight > self.maxWeight:
-                    self.maxWeight = weight
-                
-                weight = weight / self.maxWeight
-                weightList.append(weight)
+                if segmentIndex == None:
+                    weight = 1.0
+                else:
+                    weight = (self.totalPSum / self.getP(heapIndex) / len(self.heap)) ** self.beta
+                    if weight > self.maxWeight:
+                        self.maxWeight = weight
+                    weight = weight / self.maxWeight
+                weights.append(weight)
                 break
                 
             # NB! having index first is fastest in C-order matrices
@@ -237,6 +263,6 @@ class RankManager:
         actions = self.replayMemory.actions[indexes]
         rewards = self.replayMemory.rewards[indexes]
         terminals = self.replayMemory.terminals[indexes]
-        return self.prestates, actions, rewards, self.poststates, terminals, indexes, heapIndexes, weightList
+        return self.prestates, actions, rewards, self.poststates, terminals, indexes, heapIndexes, weights
 
         

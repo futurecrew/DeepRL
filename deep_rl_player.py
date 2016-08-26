@@ -15,7 +15,7 @@ import util
 #from model_runner import ModelRunner
 from model_runner_neon import ModelRunnerNeon
 from replay_memory import ReplayMemory
-from rank_manager import RankManager
+from sampling_manager import SamplingManager
 
 class DeepRLPlayer:
     def __init__(self, settings, playFile=None):
@@ -74,7 +74,7 @@ class DeepRLPlayer:
         self.ale.setInt("random_seed",123)
         
         random_seed = self.ale.getInt("random_seed")
-        print("random_seed: " + str(random_seed))
+        #print("random_seed: " + str(random_seed))
 
         if displayScreen:
             self.ale.setBool('display_screen', True)
@@ -87,7 +87,7 @@ class DeepRLPlayer:
         print 'legalActions: %s' % self.legalActions
         
         (self.screen_width,self.screen_height) = self.ale.getScreenDims()
-        print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
+        #print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
         
         (display_width,display_height) = (1024,420)
         
@@ -96,11 +96,14 @@ class DeepRLPlayer:
 
     def initializeReplayMemory(self):
         if 'prioritized_replay' in self.settings and self.settings['prioritized_replay'] == True:
-            self.replayMemory = RankManager(self.settings['max_replay_memory'], 
+            self.replayMemory = SamplingManager(self.settings['max_replay_memory'], 
                                          self.settings['train_batch_size'],
                                          self.settings['screen_history'],
                                          self.settings['screen_width'],
-                                         self.settings['screen_height'])
+                                         self.settings['screen_height'],
+                                         self.settings['prioritized_mode'],
+                                         self.settings['sampling_alpha'],
+                                         self.settings['sampling_beta'])
         else:
             self.replayMemory = ReplayMemory(self.settings['max_replay_memory'], 
                                          self.settings['train_batch_size'],
@@ -172,21 +175,7 @@ class DeepRLPlayer:
         state = self.getScreenPixels()
         
         return reward, state, lostLife, gameOver
-    """
-    def doActions(self, actionIndex):
-        action = self.legalActions[actionIndex]
-        reward = 0
-        lostLife = False 
-        lives = self.ale.lives()
-        reward += self.ale.act(action)
-        gameOver = self.ale.game_over()
-        if self.ale.lives() < lives or gameOver:
-            lostLife = True
-        state = self.getScreenPixels()
-        
-        return reward, state, lostLife, gameOver
-    """
-    
+
     def generateReplayMemory(self, count):
         print 'Generating %s replay memory' % count
         startTime = time.time()
@@ -366,9 +355,9 @@ if __name__ == '__main__':
 
     #settings['game'] = 'breakout'
     #settings['game'] = 'space_invaders'
-    settings['game'] = 'enduro'
+    #settings['game'] = 'enduro'
     #settings['game'] = 'kung_fu_master'
-    #settings['game'] = 'krull'
+    settings['game'] = 'krull'
     #settings['game'] = 'seaquest'
 
     settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']    
@@ -403,11 +392,21 @@ if __name__ == '__main__':
     settings['test_epsilon'] = 0.001
     settings['update_step'] = 30000
 
-    # Prioritized experience replay params
+    # Prioritized experience replay params for RANK
     settings['prioritized_replay'] = True
     settings['learning_rate'] = 0.00025 / 4
     settings['prioritized_mode'] = 'RANK'
-    
+    settings['sampling_alpha'] = 0.7
+    settings['sampling_beta'] = 0.5
+
+    """
+    # Prioritized experience replay params for PROPORTION
+    settings['prioritized_replay'] = True
+    settings['learning_rate'] = 0.00025 / 4
+    settings['prioritized_mode'] = 'PROPORTION'
+    settings['sampling_alpha'] = 0.6
+    settings['sampling_beta'] = 0.4
+    """
     
     dataFile = None    
     #dataFile = 'snapshot/breakout/dqn_neon_3100000.prm'

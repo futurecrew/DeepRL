@@ -116,13 +116,12 @@ class ModelRunnerNeon():
         if self.settings['prioritized_replay'] == True:
             deltaValue = delta.asnumpyarray()
             for i in range(self.trainBatchSize):
-                replayMemory.updateWeight(heapIndexes[i], abs(deltaValue[actions[i], i]))
+                replayMemory.updateTD(heapIndexes[i], abs(deltaValue[actions[i], i]))
                 deltaValue[actions[i], i] = weights[i] * deltaValue[actions[i], i]
             delta.set(deltaValue.copy())
+            #deltaValue2 = delta.asnumpyarray()
+            #pass
             
-            if self.totalTrainStep % 10**6 == 0:
-                replayMemory.sort()
-        
         self.be.clip(delta, -1.0, 1.0, out = delta)
         
         self.trainNet.bprop(delta)
