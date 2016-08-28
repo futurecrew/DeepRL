@@ -79,7 +79,7 @@ class ModelRunnerNeon():
         output  = self.trainNet.fprop(self.input, inference=True)
         return output.T.asnumpyarray()[0]            
 
-    def train(self, minibatch, replayMemory):
+    def train(self, minibatch, replayMemory, debug):
         if self.settings['prioritized_replay'] == True:
             prestates, actions, rewards, poststates, lostLives, replayIndexes, heapIndexes, weights = minibatch
         else:
@@ -116,14 +116,16 @@ class ModelRunnerNeon():
         if self.settings['prioritized_replay'] == True:
             deltaValue = delta.asnumpyarray()
             for i in range(self.trainBatchSize):
+                if debug:
+                    print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], deltaValue[actions[i], i], weights[i] * deltaValue[actions[i], i]) 
                 replayMemory.updateTD(heapIndexes[i], abs(deltaValue[actions[i], i]))
                 deltaValue[actions[i], i] = weights[i] * deltaValue[actions[i], i]
-            delta.set(deltaValue.copy())
+            if self.settings['use_priority_weight'] == True:
+                delta.set(deltaValue.copy())
             #deltaValue2 = delta.asnumpyarray()
             #pass
             
-        self.be.clip(delta, -1.0, 1.0, out = delta)
-        
+        self.be.clip(delta, -1.0, 1.0, out = delta)        
         self.trainNet.bprop(delta)
         self.optimizer.optimize(self.trainNet.layers_to_optimize, epoch=0)
 

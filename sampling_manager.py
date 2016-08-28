@@ -4,12 +4,13 @@ import numpy as np
 
 class SamplingManager:
     def __init__(self, size, batchSize, historyLen, width, height, samplingMode,
-                            samplingAlpha, samplingBeta):
+                            samplingAlpha, samplingBeta, sortTerm):
         self.batchSize = batchSize
         self.historyLen = historyLen
         self.samplingMode = samplingMode
         self.alpha = samplingAlpha
         self.beta = samplingBeta
+        self.sortTerm = sortTerm
         self.replayMemory = ReplayMemory(size, batchSize, historyLen, width, height)
         self.heapIndexList = [-1] * size        # This list maps replayIndex to heapIndex
         self.heap = []                                     # Binary heap
@@ -17,6 +18,7 @@ class SamplingManager:
         self.proportionEpsilon = 0.0000001
         self.maxWeight= 0
         self.maxTD = 1.0
+        self.segmentCalculationUnit = 1000
         # pre-allocate prestates and poststates for minibatch
         self.prestates = np.empty((batchSize, historyLen, height, width), dtype = np.uint8)
         self.poststates = np.empty((batchSize, historyLen, height, width), dtype = np.uint8)
@@ -45,10 +47,10 @@ class SamplingManager:
         
         self.addCallNo += 1
         
+        if self.addCallNo % self.sortTerm == 0:
+            self.sort()
         if self.addCallNo % (10**5) == 0:     # Clear segmentIndex to calculate segment again
             self.segmentIndex = {}
-        if self.addCallNo % (10**6) == 0:
-            self.sort()
         
     def remove(self, index):
         lastIndex = len(self.heap) - 1
@@ -163,7 +165,7 @@ class SamplingManager:
     
     def getSegments(self):
         dataLen = len(self.heap) - 1
-        segment = dataLen / 100000 * 100000
+        segment = dataLen / self.segmentCalculationUnit * self.segmentCalculationUnit
         if segment == 0:       # If data len is less than necessary size then use uniform segments
             return None
         else:

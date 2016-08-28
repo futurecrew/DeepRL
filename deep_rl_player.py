@@ -103,7 +103,8 @@ class DeepRLPlayer:
                                          self.settings['screen_height'],
                                          self.settings['prioritized_mode'],
                                          self.settings['sampling_alpha'],
-                                         self.settings['sampling_beta'])
+                                         self.settings['sampling_beta'],
+                                         self.settings['heap_sort_term'])
         else:
             self.replayMemory = ReplayMemory(self.settings['max_replay_memory'], 
                                          self.settings['train_batch_size'],
@@ -171,6 +172,10 @@ class DeepRLPlayer:
             gameOver = self.ale.game_over()
             if self.ale.lives() < lives or gameOver:
                 lostLife = True
+                
+                if self.settings['lost_life_game_over'] == True:
+                    gameOver = True
+                    
                 break
         state = self.getScreenPixels()
         
@@ -255,7 +260,7 @@ class DeepRLPlayer:
                     
                 if stepNo % self.settings['train_step'] == 0:
                     minibatch = self.replayMemory.getMinibatch()
-                    self.modelRunner.train(minibatch, self.replayMemory)
+                    self.modelRunner.train(minibatch, self.replayMemory, self.debug)
                     self.trainStep += 1
                 
                     if self.trainStep % self.settings['save_step'] == 0:
@@ -264,7 +269,7 @@ class DeepRLPlayer:
                 self.addToHistoryBuffer(state)
                 
                 if gameOver:
-                    if episode % 50 == 0:
+                    if episode % 500 == 0:
                         print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s" % (
                                                                                 episode, episodeTotalReward,
                                                                                 stepNo, (time.time() - episodeStartTime),
@@ -277,10 +282,10 @@ class DeepRLPlayer:
                     
                     self.resetGame()
                 
-            print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. last e: %.2f" % \
+            print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. last e: %.3f, train=%s" % \
                   (epoch, float(epochTotalReward) / episode, 
                    time.time() - epochStartTime,
-                   greedyEpsilon)
+                   greedyEpsilon, self.trainStep)
                     
             self.epochDone = epoch
              
@@ -327,38 +332,42 @@ class DebugInput(threading.Thread):
     def finish(self):
         self.running = False
         
-
-def trainOrPlay(settings, playFile=None):
-    player = DeepRLPlayer(settings, playFile)
-    if playFile is not None:
-        print 'Play using dataFile: %s' % dataFile
-        player.modelRunner.load(playFile + '.weight')
-        player.test(0)
+def train(settings, saveFile=None):
+    if saveFile is not None:        # retrain
+        print 'Resume trainig: %s' % saveFile
+    
+        with open(saveFile + '.pickle') as f:
+            player = pickle.load(f)
+            player.trainStart = time.strftime('%Y%m%d_%H%M%S')
+            logFile="output/%s_%s.log" % (settings['game'], player.trainStart)            
+            util.Logger(logFile)
+            player.printEnv()
+            player.initializeAle()
+            player.initializeReplayMemory()
+            player.initializeModel()
+            player.modelRunner.load(saveFile + '.weight')
+            player.train(player.replayMemoryNo)
+            DebugInput(player).start()
     else:
+        player = DeepRLPlayer(settings)
         player.trainStep = 0
         player.train()
-    
-def retrain(saveFile):
-    print 'Resume trainig: %s' % saveFile
 
-    with open(saveFile + '.pickle') as f:
-        player = pickle.load(f)
-        player.printEnv()
-        player.initializeAle()
-        player.initializeReplayMemory()
-        player.initializeModel()
-        player.modelRunner.load(saveFile + '.weight')
-        player.train(player.replayMemoryNo)
-        
+def play(settings, playFile=None):
+    print 'Play using dataFile: %s' % playFile
+    player = DeepRLPlayer(settings, playFile)
+    player.modelRunner.load(playFile + '.weight')
+    player.test(0)
+    
 if __name__ == '__main__':    
     settings = {}
 
     #settings['game'] = 'breakout'
     #settings['game'] = 'space_invaders'
-    #settings['game'] = 'enduro'
+    settings['game'] = 'enduro'
     #settings['game'] = 'kung_fu_master'
-    settings['game'] = 'krull'
-    #settings['game'] = 'seaquest'
+    #settings['game'] = 'krull'
+    #settings['game'] = 'hero'
 
     settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']    
     settings['frame_repeat'] = 4
@@ -383,6 +392,7 @@ if __name__ == '__main__':
     settings['screen_history'] = 4
     settings['learning_rate'] = 0.00025
     settings['rms_decay'] = 0.95
+    settings['lost_life_game_over'] = True
     settings['double_dqn'] = False
     settings['prioritized_replay'] = False
 
@@ -398,7 +408,11 @@ if __name__ == '__main__':
     settings['prioritized_mode'] = 'RANK'
     settings['sampling_alpha'] = 0.7
     settings['sampling_beta'] = 0.5
+    settings['heap_sort_term'] = 250000
 
+    #settings['use_priority_weight'] = True
+    settings['use_priority_weight'] = False
+    
     """
     # Prioritized experience replay params for PROPORTION
     settings['prioritized_replay'] = True
@@ -406,11 +420,13 @@ if __name__ == '__main__':
     settings['prioritized_mode'] = 'PROPORTION'
     settings['sampling_alpha'] = 0.6
     settings['sampling_beta'] = 0.4
+    settings['heap_sort_term'] = 250000
     """
+    
     
     dataFile = None    
     #dataFile = 'snapshot/breakout/dqn_neon_3100000.prm'
-    #dataFile = 'snapshot/%s/%s' % (settings['game'], '20160825_075716/dqn_1900000')
+    #dataFile = 'snapshot/%s/%s' % (settings['game'], '20160827_194119/dqn_400000')
     
-    trainOrPlay(settings, dataFile)
-    #retrain(dataFile)
+    train(settings, dataFile)
+    #play(dataFile)

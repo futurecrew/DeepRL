@@ -5,10 +5,12 @@ import numpy as np
 import unittest
 from sampling_manager import SamplingManager
 
-class TestSamplingManager(unittest.TestCase):
-    def setUp(self):
+#class TestSamplingManager(unittest.TestCase):
+class TestSamplingManager:
+    def __init__(self):
         self.alpha = 0.7
         self.beta = 0.5
+        self.sortTerm = 250000
 
     def checkHeapIndexListValidity(self, manager):
         for i in range(1, len(manager.heap)):
@@ -21,7 +23,7 @@ class TestSamplingManager(unittest.TestCase):
         
         for dataLen in totalList:
             #print 'dataLen : %s' % dataLen
-            manager = SamplingManager(replayMemorySize, 32, 4, 84, 84, 'RANK', self.alpha, self.beta)
+            manager = SamplingManager(replayMemorySize, 32, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
             for i in range(dataLen):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -40,7 +42,7 @@ class TestSamplingManager(unittest.TestCase):
         replayMemorySize = 1000000
         
         for t in range(2):
-            manager = SamplingManager(replayMemorySize, 32, 4, 84, 84, 'RANK', self.alpha, self.beta)
+            manager = SamplingManager(replayMemorySize, 32, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
             for i in range(2200000):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -56,7 +58,7 @@ class TestSamplingManager(unittest.TestCase):
         replayMemorySize = 100000
         dataLen = 220000
         minibatchSize = 32
-        manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta)
+        manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
         for i in range(dataLen):
             state = np.zeros((84, 84), dtype=np.int)
             state.fill(i)
@@ -90,7 +92,7 @@ class TestSamplingManager(unittest.TestCase):
         minibatchSize = 32
         dataLenList = [1000, 100000, 220000]
         for dataLen in dataLenList:
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta)
+            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
             for i in range(dataLen):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -123,7 +125,7 @@ class TestSamplingManager(unittest.TestCase):
         minibatchSize = 32
         dataLenList = [1000, 100000, 200000]
         for dataLen in dataLenList:
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta)
+            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
             for i in range(dataLen):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -152,7 +154,7 @@ class TestSamplingManager(unittest.TestCase):
         dataLenList = [100, 1000, 2000, 10**6]
         for dataLen in dataLenList:
             minibatchSize = 32
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta)
+            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
             for i in range(dataLen):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -184,7 +186,7 @@ class TestSamplingManager(unittest.TestCase):
         dataLenList = [100, 1000, 2000, 2200]
         for dataLen in dataLenList:
             minibatchSize = 32
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta)
+            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
             for i in range(dataLen):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -224,13 +226,13 @@ class TestSamplingManager(unittest.TestCase):
     def test_CalculateSegments(self):
         replayMemorySize = 10**6
         #dataLenList = [50000, 100000, 1000000, 2000000]
-        dataLenList = [2000000]
+        dataLenList = [1000000]
         for dataLen in dataLenList:
             
             print 'testing %s' % dataLen
             
             minibatchSize = 32
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta)
+            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
             
             time1 = time.time()
             for i in range(dataLen):
@@ -248,7 +250,7 @@ class TestSamplingManager(unittest.TestCase):
     def test_GetSegments(self):
         replayMemorySize = 10**6
         minibatchSize = 32
-        manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta)
+        manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, 'RANK', self.alpha, self.beta, self.sortTerm)
         for i in range(10**6):
             state = np.zeros((84, 84), dtype=np.int)
             state.fill(i)
@@ -260,4 +262,5 @@ class TestSamplingManager(unittest.TestCase):
             
         
 if __name__ == '__main__':
-    unittest.main()
+    #unittest.main()
+    TestSamplingManager().test_CalculateSegments()
