@@ -6,7 +6,7 @@ import threading
 import traceback
 from neon.backends import gen_backend
 from neon.layers import Conv, Affine, Pooling
-from neon.initializers import Gaussian
+from neon.initializers import Gaussian, Xavier
 from neon.transforms.activation import Rectlin, Softmax
 from neon.models import Model
 from neon.layers import GeneralizedCost
@@ -19,7 +19,6 @@ class ModelRunnerNeon():
         self.trainBatchSize = settings['train_batch_size']
         self.discountFactor = settings['discount_factor']
         self.updateStep = settings['update_step']
-        self.totalTrainStep = 0
         
         self.be = gen_backend(backend='gpu',             
                          batch_size=self.trainBatchSize)
@@ -51,14 +50,16 @@ class ModelRunnerNeon():
         self.blankLabel = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
 
     def createLayers(self, maxActionNo):
-        init_gauss = Gaussian(0, 0.01)
-        layers = [Conv(fshape=(8, 8, 32), strides=4, init=init_gauss, activation=Rectlin()),
-                        Conv(fshape=(4, 4, 64), strides=2, init=init_gauss, activation=Rectlin()),
-                        Conv(fshape=(3, 3, 64), strides=1, init=init_gauss, activation=Rectlin()),
-                        Affine(nout=512, init=init_gauss, activation=Rectlin()),
-                        Affine(nout=maxActionNo, init=init_gauss)
+        if self.settings['dnn_initializer'] == 'xavier':
+            initializer = Xavier()
+        else:
+            initializer = Gaussian(0, 0.01)
+        layers = [Conv(fshape=(8, 8, 32), strides=4, init=initializer, bias=initializer, activation=Rectlin()),
+                        Conv(fshape=(4, 4, 64), strides=2, init=initializer, bias=initializer, activation=Rectlin()),
+                        Conv(fshape=(3, 3, 64), strides=1, init=initializer, bias=initializer, activation=Rectlin()),
+                        Affine(nout=512, init=initializer, bias=initializer, activation=Rectlin()),
+                        Affine(nout=maxActionNo, init=initializer, bias=initializer)
                         ]
-        
         return layers        
         
     def clipReward(self, reward):
@@ -128,11 +129,6 @@ class ModelRunnerNeon():
         self.be.clip(delta, -1.0, 1.0, out = delta)        
         self.trainNet.bprop(delta)
         self.optimizer.optimize(self.trainNet.layers_to_optimize, epoch=0)
-
-        self.totalTrainStep += 1
-        
-        if self.totalTrainStep % self.updateStep == 0:
-            self.updateModel()
 
     def updateModel(self):
         # have to serialize also states for batch normalization to work

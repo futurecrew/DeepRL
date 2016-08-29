@@ -222,13 +222,13 @@ class DeepRLPlayer:
                 episodeReward = 0
             
                 if self.debug:
-                    print "[ Test  %s ] %s steps, avg score: %.1f. ep: %d, elapsed: %.0fs. last e: %.2f" % \
+                    print "[ Test  %s ] %s steps, avg score: %.1f. ep: %d, elapsed: %.0fs. last e: %.3f" % \
                           (epoch, stepNo, float(totalReward) / episode, episode, 
                            time.time() - testStartTime,
                            greedyEpsilon)
         
         episode = max(episode, 1)          
-        print "[ Test  %s ] avg score: %.1f. elapsed: %.0fs. last e: %.2f" % \
+        print "[ Test  %s ] avg score: %.1f. elapsed: %.0fs. last e: %.3f" % \
               (epoch, float(totalReward) / episode, 
                time.time() - testStartTime,
                greedyEpsilon)
@@ -281,6 +281,9 @@ class DeepRLPlayer:
                     episodeTotalReward = 0
                     
                     self.resetGame()
+
+                if stepNo > 0 and stepNo % self.settings['update_step'] == 0:
+                    self.modelRunner.updateModel()
                 
             print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. last e: %.3f, train=%s" % \
                   (epoch, float(epochTotalReward) / episode, 
@@ -364,8 +367,8 @@ if __name__ == '__main__':
 
     #settings['game'] = 'breakout'
     #settings['game'] = 'space_invaders'
-    settings['game'] = 'enduro'
-    #settings['game'] = 'kung_fu_master'
+    #settings['game'] = 'enduro'
+    settings['game'] = 'kung_fu_master'
     #settings['game'] = 'krull'
     #settings['game'] = 'hero'
 
@@ -396,6 +399,11 @@ if __name__ == '__main__':
     settings['double_dqn'] = False
     settings['prioritized_replay'] = False
 
+    settings['update_step_in_stepNo'] = True
+    #settings['dnn_initializer'] = 'xavier'
+    settings['dnn_initializer'] = 'gaussian'
+
+    """
     # Double DQN hyper params
     settings['double_dqn'] = True
     settings['train_min_epsilon'] = 0.01
@@ -412,6 +420,7 @@ if __name__ == '__main__':
 
     #settings['use_priority_weight'] = True
     settings['use_priority_weight'] = False
+    """
     
     """
     # Prioritized experience replay params for PROPORTION
