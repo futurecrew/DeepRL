@@ -162,7 +162,7 @@ class DeepRLPlayer:
         self.historyBuffer[0, :-1] = self.historyBuffer[0, 1:]
         self.historyBuffer[0, -1] = state
 
-    def doActions(self, actionIndex):
+    def doActions(self, actionIndex, mode):
         action = self.legalActions[actionIndex]
         reward = 0
         lostLife = False 
@@ -173,7 +173,7 @@ class DeepRLPlayer:
             if self.ale.lives() < lives or gameOver:
                 lostLife = True
                 
-                if self.settings['lost_life_game_over'] == True:
+                if mode == 'TRAIN' and self.settings['lost_life_game_over'] == True:
                     gameOver = True
                     
                 break
@@ -188,7 +188,7 @@ class DeepRLPlayer:
         for i in range(count):
             actionIndex, greedyEpsilon, type = self.getActionFromModel('TRAIN')
             
-            reward, state, lostLife, gameOver = self.doActions(actionIndex)
+            reward, state, lostLife, gameOver = self.doActions(actionIndex, 'TRAIN')
 
             self.replayMemory.add(actionIndex, reward, state, lostLife)
                 
@@ -209,7 +209,7 @@ class DeepRLPlayer:
         for stepNo in range(self.settings['test_step']):
             actionIndex, greedyEpsilon, actionType = self.getActionFromModel('TEST')
                 
-            reward, state, lostLife, gameOver = self.doActions(actionIndex)
+            reward, state, lostLife, gameOver = self.doActions(actionIndex, 'TEST')
                 
             episodeReward += reward
 
@@ -251,7 +251,7 @@ class DeepRLPlayer:
             for stepNo in range(self.settings['epoch_step']):
                 actionIndex, greedyEpsilon, type = self.getActionFromModel('TRAIN')
                 
-                reward, state, lostLife, gameOver = self.doActions(actionIndex)
+                reward, state, lostLife, gameOver = self.doActions(actionIndex, 'TRAIN')
 
                 episodeTotalReward += reward
                 epochTotalReward += reward
@@ -400,8 +400,8 @@ if __name__ == '__main__':
     settings['prioritized_replay'] = False
 
     settings['update_step_in_stepNo'] = True
-    #settings['dnn_initializer'] = 'xavier'
-    settings['dnn_initializer'] = 'gaussian'
+    settings['dnn_initializer'] = 'xavier'
+    #settings['dnn_initializer'] = 'gaussian'
 
     """
     # Double DQN hyper params
