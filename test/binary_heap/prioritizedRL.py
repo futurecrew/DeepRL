@@ -173,7 +173,7 @@ class Tester:
             if weight > self.maxWeight:
                 self.maxWeight = weight
             
-            weight / self.maxWeight
+            weight = weight / self.maxWeight
             # DJDJ
             #weight = 1.0
             return index, weight, item[0]

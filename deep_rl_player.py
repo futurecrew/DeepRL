@@ -368,12 +368,15 @@ if __name__ == '__main__':
     #settings['game'] = 'breakout'
     #settings['game'] = 'space_invaders'
     #settings['game'] = 'enduro'
-    settings['game'] = 'kung_fu_master'
+    #settings['game'] = 'kung_fu_master'
     #settings['game'] = 'krull'
-    #settings['game'] = 'hero'
+    settings['game'] = 'hero'
 
     settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']    
     settings['frame_repeat'] = 4
+    
+    if settings['game'] == 'space_invaders':
+        settings['frame_repeat'] = 3
 
     #settings['show_screen'] = True
     settings['show_screen'] = False
@@ -398,6 +401,7 @@ if __name__ == '__main__':
     settings['lost_life_game_over'] = True
     settings['double_dqn'] = False
     settings['prioritized_replay'] = False
+    settings['use_priority_weight'] = True
 
     settings['update_step_in_stepNo'] = True
     settings['dnn_initializer'] = 'xavier'
@@ -409,7 +413,9 @@ if __name__ == '__main__':
     settings['train_min_epsilon'] = 0.01
     settings['test_epsilon'] = 0.001
     settings['update_step'] = 30000
+    """
 
+    """
     # Prioritized experience replay params for RANK
     settings['prioritized_replay'] = True
     settings['learning_rate'] = 0.00025 / 4
@@ -417,21 +423,17 @@ if __name__ == '__main__':
     settings['sampling_alpha'] = 0.7
     settings['sampling_beta'] = 0.5
     settings['heap_sort_term'] = 250000
-
-    #settings['use_priority_weight'] = True
-    settings['use_priority_weight'] = False
     """
-    
     """
     # Prioritized experience replay params for PROPORTION
     settings['prioritized_replay'] = True
-    settings['learning_rate'] = 0.00025 / 4
+    #settings['learning_rate'] = 0.00025 / 4
+    settings['learning_rate'] = 0.00025 * 5
     settings['prioritized_mode'] = 'PROPORTION'
     settings['sampling_alpha'] = 0.6
     settings['sampling_beta'] = 0.4
     settings['heap_sort_term'] = 250000
     """
-    
     
     dataFile = None    
     #dataFile = 'snapshot/breakout/dqn_neon_3100000.prm'
