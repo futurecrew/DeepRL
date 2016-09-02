@@ -82,34 +82,3 @@ class ReplayMemory:
     rewards = self.rewards[indexes]
     terminals = self.terminals[indexes]
     return self.prestates, actions, rewards, self.poststates, terminals
-
-  def getMinibatchSegment(self, segmentList):
-    # memory must include poststate, prestate and history
-    assert self.count > self.history_length
-    # sample random indexes
-    indexes = []
-    while len(indexes) < self.batch_size:
-      # find random index 
-      while True:
-        # sample one index (ignore states wraping over 
-        index = random.randint(self.history_length, self.count - 1)
-        # if wraps over current pointer, then get new one
-        if index >= self.current and index - self.history_length < self.current:
-          continue
-        # if wraps over episode end, then get new one
-        # NB! poststate (last screen) can be terminal state!
-        if self.terminals[(index - self.history_length):index].any():
-          continue
-        # otherwise use this index
-        break
-      
-      # NB! having index first is fastest in C-order matrices
-      self.prestates[len(indexes), ...] = self.getState(index - 1)
-      self.poststates[len(indexes), ...] = self.getState(index)
-      indexes.append(index)
-
-    # copy actions, rewards and terminals with direct slicing
-    actions = self.actions[indexes]
-    rewards = self.rewards[indexes]
-    terminals = self.terminals[indexes]
-    return self.prestates, actions, rewards, self.poststates, terminals
