@@ -3,15 +3,16 @@ from replay_memory import ReplayMemory
 import numpy as np
 
 class SamplingManager:
-    def __init__(self, size, batchSize, historyLen, width, height, samplingMode,
+    def __init__(self, replayMemory, useGpuReplayMem, size, batchSize, historyLen, samplingMode,
                             samplingAlpha, samplingBeta, sortTerm):
+        self.replayMemory = replayMemory
+        self.useGpuReplayMem = useGpuReplayMem
         self.batchSize = batchSize
         self.historyLen = historyLen
         self.samplingMode = samplingMode
         self.alpha = samplingAlpha
         self.beta = samplingBeta
         self.sortTerm = sortTerm
-        self.replayMemory = ReplayMemory(size, batchSize, historyLen, width, height)
         self.heapIndexList = [-1] * size        # This list maps replayIndex to heapIndex
         self.heap = []                                     # Binary heap
         self.heap.append((None, None))
@@ -19,9 +20,6 @@ class SamplingManager:
         self.maxWeight= 0
         self.maxTD = 1.0
         self.segmentCalculationUnit = 1000
-        # pre-allocate prestates and poststates for minibatch
-        self.prestates = np.empty((batchSize, historyLen, height, width), dtype = np.uint8)
-        self.poststates = np.empty((batchSize, historyLen, height, width), dtype = np.uint8)
         self.segmentIndex = {}              # heap indexes for each segment
         self.addCallNo = 0
 
@@ -256,8 +254,12 @@ class SamplingManager:
                 break
                 
             # NB! having index first is fastest in C-order matrices
-            self.prestates[len(indexes), ...] = self.replayMemory.getState(replayIndex - 1)
-            self.poststates[len(indexes), ...] = self.replayMemory.getState(replayIndex)
+            if self.useGpuReplayMem:
+                self.replayMemory.prestates_view[len(indexes)][:] = self.replayMemory.getState(replayIndex - 1)
+                self.replayMemory.poststates_view[len(indexes)][:] = self.replayMemory.getState(replayIndex)
+            else:            
+                self.replayMemory.prestates[len(indexes), ...] = self.replayMemory.getState(replayIndex - 1)
+                self.replayMemory.poststates[len(indexes), ...] = self.replayMemory.getState(replayIndex)
             indexes.append(replayIndex)
             heapIndexes.append(heapIndex)
     
@@ -265,6 +267,6 @@ class SamplingManager:
         actions = self.replayMemory.actions[indexes]
         rewards = self.replayMemory.rewards[indexes]
         terminals = self.replayMemory.terminals[indexes]
-        return self.prestates, actions, rewards, self.poststates, terminals, indexes, heapIndexes, weights
+        return self.replayMemory.prestates, actions, rewards, self.replayMemory.poststates, terminals, indexes, heapIndexes, weights
 
         
