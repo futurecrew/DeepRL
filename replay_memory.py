@@ -6,10 +6,11 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ReplayMemory:
-  def __init__(self, be, useGpuReplayMem, size, batchSize, historyNo, width, height):
+  def __init__(self, be, useGpuReplayMem, size, batchSize, historyNo, width, height, minibatchRandom):
     self.be = be
     self.useGpuReplayMem = useGpuReplayMem
     self.size = size
+    self.minibatchRandom = minibatchRandom
     # preallocate memory
     self.actions = np.empty(self.size, dtype = np.uint8)
     self.rewards = np.empty(self.size, dtype = np.integer)
@@ -64,6 +65,12 @@ class ReplayMemory:
       return self.screens[indexes, ...]
 
   def getMinibatch(self):
+    if self.minibatchRandom:
+        return self.getMinibatchRandom()
+    else:
+        return self.getMinibatchSequential()
+    
+  def getMinibatchRandom(self):
     # memory must include poststate, prestate and history
     assert self.count > self.history_length
     # sample random indexes
@@ -91,6 +98,41 @@ class ReplayMemory:
           self.prestates[len(indexes), ...] = self.getState(index - 1)
           self.poststates[len(indexes), ...] = self.getState(index)
       indexes.append(index)
+
+    # copy actions, rewards and terminals with direct slicing
+    actions = self.actions[indexes]
+    rewards = self.rewards[indexes]
+    terminals = self.terminals[indexes]
+    return self.prestates, actions, rewards, self.poststates, terminals
+
+  def getMinibatchSequential(self):
+    # memory must include poststate, prestate and history
+    assert self.count >= self.batch_size + self.history_length
+    # sample random indexes
+    indexes = []
+    for i in range(self.count):
+        index = self.current - i - 1
+        if index < 0:
+            index += self.count
+        # if wraps over current pointer, then get new one
+        if index >= self.current and index - self.history_length < self.current:
+          continue
+        # if wraps over episode end, then get new one
+        # NB! poststate (last screen) can be terminal state!
+        if self.terminals[(index - self.history_length):index].any():
+          continue
+        
+        # NB! having index first is fastest in C-order matrices
+        if self.useGpuReplayMem:      
+            self.prestates_view[len(indexes)][:] = self.getState(index - 1)
+            self.poststates_view[len(indexes)][:] = self.getState(index)
+        else:            
+            self.prestates[len(indexes), ...] = self.getState(index - 1)
+            self.poststates[len(indexes), ...] = self.getState(index)
+        indexes.append(index)
+
+        if len(indexes) == self.batch_size:
+            break
 
     # copy actions, rewards and terminals with direct slicing
     actions = self.actions[indexes]

@@ -1,9 +1,11 @@
 import numpy as np
+import os
 import random
 import math
 import time
 import threading
 import traceback
+import pickle
 from neon.backends import gen_backend
 from neon.layers import Conv, Affine, Pooling
 from neon.initializers import Gaussian, Xavier, Uniform
@@ -61,6 +63,7 @@ class ModelRunnerNeon():
             self.optimizer = RMSProp(decay_rate=settings['rms_decay'],
                                             learning_rate=settings['learning_rate'])
 
+        self.newParamArrived = False
         self.maxActionNo = maxActionNo
         self.running = True
         self.blankLabel = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
@@ -125,13 +128,27 @@ class ModelRunnerNeon():
         else:
             self.input.set(data.transpose(1, 2, 3, 0).copy())
             self.be.divide(self.input, 255, self.input)
-        
+
+    def getParams(self):
+        return self.trainNet.layers.get_description(get_weights=True,
+                                                     keep_states=False)
+                
+    def setParams(self, newParam):
+        self.newParam = newParam
+        self.newParamArrived = True 
+
     def predict(self, historyBuffer):
         self.setInput(historyBuffer)
         output  = self.trainNet.fprop(self.input, inference=True)
         return output.T.asnumpyarray()[0]            
 
     def train(self, minibatch, replayMemory, debug):
+        if self.newParamArrived:
+            #start = time.time()
+            self.trainNet.layers.load_weights(self.newParam, False)
+            self.newParamArrived = False
+            #print 'modelRunner read new params took %.3fs' % (time.time() - start)
+            
         if self.settings['prioritized_replay'] == True:
             prestates, actions, rewards, poststates, lostLives, replayIndexes, heapIndexes, weights = minibatch
         else:

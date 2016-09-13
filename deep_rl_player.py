@@ -7,19 +7,26 @@ from ale_python_interface import ALEInterface
 import numpy as np
 import random
 import multiprocessing
+import scipy.ndimage as ndimage
 import cv2
 import pickle
 import threading
 import time
 import util
+from multiprocessing import Process, Queue
 #from model_runner import ModelRunner
 from model_runner_neon import ModelRunnerNeon
+from model_runner_tf import ModelRunnerTF
 from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
 
 class DeepRLPlayer:
-    def __init__(self, settings, playFile=None):
+    def __init__(self, settings, playFile=None, processNo=None, queueList=None, sharedData=None):
         self.settings = settings
+        self.playFile = playFile
+        self.processNo = processNo
+        self.queueList = queueList
+        self.sharedData = sharedData
         self.grayPixels = np.zeros((84, 84), np.float)
         self.zeroHistory = []
         for i in range(4):
@@ -36,7 +43,7 @@ class DeepRLPlayer:
         self.epochDone = 0
         self.trainStart = time.strftime('%Y%m%d_%H%M%S')
 
-        if playFile is None:
+        if self.playFile is None:
             logFile="output/%s_%s.log" % (settings['game'], self.trainStart)            
             util.Logger(logFile)
         
@@ -53,24 +60,33 @@ class DeepRLPlayer:
             os.makedirs(self.snapshotFolder)
         
         self.printEnv()
+        self.initializePost()
         
-        if self.settings['show_screen'] or playFile is not None:
+    def initializePost(self):
+        """ initialization that should be run on __init__() or after deserialization """
+        if self.settings['show_screen'] or self.playFile is not None:
             displayScreen = True
         else:
             displayScreen = False
-        
+
         self.initializeAle(displayScreen)
         self.initializeModel()
         self.initializeReplayMemory()
-
-        self.debug = False
+        
+        """
+        if self.processNo != None:
+            self.initializeQueue()
+        else:
+            DebugInput(self).start()
+        """
         DebugInput(self).start()
-    
+        self.debug = False
+        
     def initializeAle(self, displayScreen=False):
         self.ale = ALEInterface()
         
         #max_frames_per_episode = self.ale.getInt("max_num_frames_per_episode");
-        self.ale.setInt("random_seed",123)
+        self.ale.setInt("random_seed", random.randint(1, 1000))
         
         #random_seed = self.ale.getInt("random_seed")
         #print("random_seed: " + str(random_seed))
@@ -85,7 +101,7 @@ class DeepRLPlayer:
         print 'legalActions: %s' % self.legalActions
         
         (self.screen_width,self.screen_height) = self.ale.getScreenDims()
-        #print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
+        print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
         
         (display_width,display_height) = (1024,420)
         
@@ -94,11 +110,20 @@ class DeepRLPlayer:
         
     def initializeModel(self):
         #self.modelRunner = ModelRunner(
-        self.modelRunner = ModelRunnerNeon(
+        if self.settings['backend'] == 'NEON':
+            self.modelRunner = ModelRunnerNeon(
                                     self.settings, 
                                     maxActionNo = len(self.legalActions),
                                     batchDimension = self.batchDimension
                                     )
+        elif self.settings['backend'] == 'TF':
+            self.modelRunner = ModelRunnerTF(
+                                    self.settings, 
+                                    maxActionNo = len(self.legalActions),
+                                    batchDimension = self.batchDimension
+                                    )
+        else:
+            print "settings['backend'] should be NEON or TF."
 
     def initializeReplayMemory(self):
         uniformReplayMemory = ReplayMemory(self.modelRunner.be,
@@ -107,7 +132,8 @@ class DeepRLPlayer:
                                      self.settings['train_batch_size'],
                                      self.settings['screen_history'],
                                      self.settings['screen_width'],
-                                     self.settings['screen_height'])
+                                     self.settings['screen_height'],
+                                     self.settings['minibatch_random'])
         if self.settings['prioritized_replay'] == True:
             self.replayMemory = SamplingManager(uniformReplayMemory,
                                          self.settings['use_gpu_replay_mem'],
@@ -121,6 +147,10 @@ class DeepRLPlayer:
         else:
             self.replayMemory = uniformReplayMemory
                                                  
+    def initializeQueue(self):
+        self.queueManager = QueueManager(self, self.processNo, self.queueList)
+        self.queueManager.start()
+                                                         
     def getActionFromModel(self, mode):
         if mode == 'TEST':
             greedyEpsilon = self.settings['test_epsilon']
@@ -136,20 +166,6 @@ class DeepRLPlayer:
             return random.randrange(0, len(self.legalActions)), greedyEpsilon, 'random'
         else:
             actionValues = self.modelRunner.predict(self.modelRunner.historyBuffer)
-            
-            """
-            maxActionValue = 0
-            maxActionIndex = []
-            for i, actionValue in enumerate(actionValues):
-                if actionValue > maxActionValue:
-                    maxActionIndex = []
-                    maxActionIndex.append(i)
-                    maxActionValue = actionValue
-                elif actionValue == maxActionValue:
-                    maxActionIndex.append(i)
-            tieNo = len(maxActionIndex)
-            actionIndex = maxActionIndex[random.randint(0, tieNo-1)]
-            """
             actionIndex = np.argmax(actionValues)
             return actionIndex, greedyEpsilon, 'trained'
         
@@ -172,30 +188,48 @@ class DeepRLPlayer:
         lostLife = False 
         lives = self.ale.lives()
         frameRepeat = self.settings['frame_repeat']
-        prevStateVisited = False
-        for f in range(frameRepeat):
-            if f == frameRepeat - 2:
-                prevState = self.ale.getScreenGrayscale()
-                prevStateVisited = True
-            reward += self.ale.act(action)
-            gameOver = self.ale.game_over()
-            if self.ale.lives() < lives or gameOver:
-                lostLife = True
-                if mode == 'TRAIN' and self.settings['lost_life_game_over'] == True:
-                    gameOver = True
-                break
-        state = self.ale.getScreenGrayscale()
-        if prevStateVisited:
-            maxState = np.maximum(prevState, state)
-        else:
-            maxState = state
-        
-        resized = cv2.resize(maxState, (84, 84))
-        
-        #print 'reward: %s' % reward
-        
-        return reward, resized, lostLife, gameOver
 
+        if 'ndimage.zoom' in self.settings and self.settings['ndimage.zoom']:        
+            state = self.ale.getScreenRGB()
+            for f in range(frameRepeat):
+                prevState = state
+                reward += self.ale.act(action)
+                state = self.ale.getScreenRGB()
+                gameOver = self.ale.game_over()
+                if self.ale.lives() < lives or gameOver:
+                    lostLife = True
+                    if mode == 'TRAIN' and self.settings['lost_life_game_over'] == True:
+                        gameOver = True
+                    break
+            maxState = np.maximum(prevState, state)
+            
+            screen = np.dot(maxState, np.array([.299, .587, .114])).astype(np.uint8)
+            screen = ndimage.zoom(screen, (0.4, 0.525))
+            screen.resize((84, 84))
+                           
+            return reward, screen, lostLife, gameOver
+        else:
+            prevStateVisited = False
+            for f in range(frameRepeat):
+                if f == frameRepeat - 2:
+                    prevState = self.ale.getScreenGrayscale()
+                    prevStateVisited = True
+                reward += self.ale.act(action)
+                gameOver = self.ale.game_over()
+                if self.ale.lives() < lives or gameOver:
+                    lostLife = True
+                    if mode == 'TRAIN' and self.settings['lost_life_game_over'] == True:
+                        gameOver = True
+                    break
+            state = self.ale.getScreenGrayscale()
+            if prevStateVisited:
+                maxState = np.maximum(prevState, state)
+            else:
+                maxState = state
+            
+            resized = cv2.resize(maxState, (84, 84))
+            return reward, resized, lostLife, gameOver
+    
     def generateReplayMemory(self, count):
         print 'Generating %s replay memory' % count
         startTime = time.time()
@@ -251,9 +285,11 @@ class DeepRLPlayer:
     def train(self, replayMemoryNo=None):
         if replayMemoryNo == None:
             replayMemoryNo = self.settings['train_start']
-        self.generateReplayMemory(replayMemoryNo)
+        if replayMemoryNo > 0:
+            self.generateReplayMemory(replayMemoryNo)
         
         print 'Start training'
+        startTime = time.time()
         
         for epoch in range(self.epochDone + 1, self.settings['max_epoch'] + 1):
             epochTotalReward = 0
@@ -278,24 +314,28 @@ class DeepRLPlayer:
                     self.modelRunner.train(minibatch, self.replayMemory, self.debug)
                     self.trainStep += 1
                 
-                    if self.trainStep % self.settings['save_step'] == 0:
+                    if (self.trainStep % self.settings['save_step'] == 0) and (self.processNo == None or self.processNo == 0):
                         self.save()
                      
                 self.modelRunner.addToHistoryBuffer(state)
                 
                 if gameOver:
                     if episode % 500 == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s" % (
+                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
                                                                                 episode, episodeTotalReward,
                                                                                 stepNo, (time.time() - episodeStartTime),
                                                                                 float(epochTotalReward) / episode,
-                                                                                self.trainStep)
+                                                                                self.trainStep,
+                                                                                (time.time() - startTime))
                     episodeStartTime = time.time()
                     
                     episode += 1
                     episodeTotalReward = 0
                     
                     self.resetGame()
+                    
+                    if self.settings['multi_process_no'] > 1 and episode % self.settings['multi_process_copy_step']  == 0:
+                        self.queueManager.sendParams()
 
                 if stepNo > 0 and stepNo % self.settings['update_step'] == 0:
                     self.modelRunner.updateModel()
@@ -306,7 +346,8 @@ class DeepRLPlayer:
                    greedyEpsilon, self.trainStep)
              
             # Test once every epoch
-            self.test(epoch)
+            if self.processNo == None or self.processNo == 0:
+                self.test(epoch)
                     
             self.epochDone = epoch
                 
@@ -314,7 +355,6 @@ class DeepRLPlayer:
         self.modelRunner.finishTrain()
     
     def save(self):
-        
         timeSnapshotFolder = self.snapshotFolder + '/' + self.trainStart
         if os.path.exists(timeSnapshotFolder) == False:
             os.makedirs(timeSnapshotFolder)
@@ -323,7 +363,7 @@ class DeepRLPlayer:
         with open(fileName + '.pickle', 'wb') as f:
             pickle.dump(self, f)
             self.modelRunner.save(fileName + '.weight')
-            #print '%s dumped' % fileName
+            print '%s dumped' % fileName
         
     def __getstate__(self):
         self.replayMemoryNo = self.replayMemory.count
@@ -331,7 +371,64 @@ class DeepRLPlayer:
         del d['ale']
         del d['replayMemory']
         del d['modelRunner']
+        del d['queueList']
+        del d['sharedData']
+        #del d['queueManager']        
         return d
+        
+class QueueManager(threading.Thread):
+    def __init__(self, player, processNo, queueList):
+        threading.Thread.__init__(self)
+        self.player = player
+        self.processNo = processNo
+        self.queueList = queueList
+        self.running = True
+        self.sendNo = 0
+    
+    def run(self):
+        while (self.running):
+            params = self.queueList[self.processNo].get()
+            #params = pickle.loads(params)
+            #start = time.time()
+            #params = self.player.sharedData['params']
+            self.player.modelRunner.setParams(params)
+            #print 'run() processNo=%s took %.2fs' % (self.processNo, time.time() - start)
+
+    def sendParams(self):
+        #start = time.time()
+        params = self.player.modelRunner.getParams()
+        #params = pickle.dumps(params, protocol=-1)
+        #print 'sendParams() processNo=%s took %.2fs' % (self.processNo, time.time() - start)
+        for i, queue in enumerate(self.queueList):
+            if i != self.processNo:
+                queue.put(params)
+    """
+    def run(self):
+        while (self.running):
+            self.queueList[self.processNo].get()
+            #start = time.time()
+            params = self.player.sharedData['params']
+            #params = pickle.loads(params)
+            self.player.modelRunner.setParams(params)
+            #print 'run() processNo=%s took %.2fs' % (self.processNo, time.time() - start)
+
+    def sendParams(self):
+        #step1 = time.time()
+        params = self.player.modelRunner.getParams()
+        #step2 = time.time()
+        #params = pickle.dumps(params, protocol=-1)
+        #params = pickle.dumps(params)
+        #step3 = time.time()
+        self.player.sharedData['params'] = params
+        #step4 = time.time()
+        #print 'sendParams() processNo=%s time1=%.2fs, time2=%.2fs, time3=%.2fs, total=%.2fs. pickledSize=%s' \
+        #    % (self.processNo, step2-step1, step3-step2, step4-step3, time.time() - step1, len(params))
+        for i, queue in enumerate(self.queueList):
+            if i != self.processNo:
+                queue.put(1)     # send 1 to notify that sharedData is written
+    """
+    def finish(self):
+        self.running = False
         
 class DebugInput(threading.Thread):
     def __init__(self, player):
@@ -340,7 +437,7 @@ class DebugInput(threading.Thread):
         self.running = True
     
     def run(self):
-        time.sleep(2)
+        time.sleep(5)
         while (self.running):
             input = raw_input('')
             if input == 'd':
@@ -350,6 +447,13 @@ class DebugInput(threading.Thread):
     def finish(self):
         self.running = False
         
+global_data = []
+
+def forkProcess(settings, processNo, queueList, sharedData):
+    print 'forkProcess %s' % processNo
+    player = DeepRLPlayer(settings, processNo= processNo, queueList=queueList, sharedData=sharedData)
+    player.train()
+    
 def train(settings, saveFile=None):
     if saveFile is not None:        # retrain
         with open(saveFile + '.pickle') as f:
@@ -359,16 +463,32 @@ def train(settings, saveFile=None):
             util.Logger(logFile)
             print 'Resume trainig: %s' % saveFile
             player.printEnv()
-            player.initializeAle()
-            player.initializeModel()
-            player.initializeReplayMemory()
+            player.initializePost()
             player.modelRunner.load(saveFile + '.weight')
-            player.train(player.replayMemoryNo)
-            DebugInput(player).start()
+            player.train(replayMemoryNo = player.replayMemoryNo)
     else:
-        player = DeepRLPlayer(settings)
-        player.trainStep = 0
-        player.train()
+        multiProcessNo = settings['multi_process_no']
+        if multiProcessNo > 1:
+            sharedData = multiprocessing.Manager().dict()
+            queueList = []
+            processList = []
+            for i in range(multiProcessNo):        
+                queue = Queue()
+                queueList.append(queue)
+                
+            for i in range(multiProcessNo):        
+                print 'creating a child process[%s]' % i
+                p = Process(target=forkProcess, args=(settings, i, queueList, sharedData))
+                p.start()
+                processList.append(p)
+                
+            while True:
+                time.sleep(1000)
+            
+        else:
+            player = DeepRLPlayer(settings)
+            player.trainStep = 0
+            player.train()
 
 def play(settings, playFile=None):
     print 'Play using dataFile: %s' % playFile
@@ -380,9 +500,9 @@ if __name__ == '__main__':
     settings = {}
 
     #settings['game'] = 'breakout'
-    settings['game'] = 'space_invaders'
+    #settings['game'] = 'space_invaders'
     #settings['game'] = 'enduro'
-    #settings['game'] = 'kung_fu_master'
+    settings['game'] = 'kung_fu_master'
     #settings['game'] = 'krull'
     #settings['game'] = 'hero'
     #settings['game'] = 'qbert'
@@ -419,17 +539,23 @@ if __name__ == '__main__':
     settings['double_dqn'] = False
     settings['prioritized_replay'] = False
     settings['use_priority_weight'] = True
+    settings['minibatch_random'] = True        # Whether to use random indexing for minibatch or not 
+    settings['multi_process_no'] = 0                # Number of multi processor for Asynchronous RL
 
+    #settings['backend'] = 'NEON'
+    settings['backend'] = 'TF'
+    
     settings['use_successive_two_frames'] = True
     settings['dnn_initializer'] = 'fan_in'
     #settings['dnn_initializer'] = 'xavier'
     #settings['optimizer'] = 'RMSPropDeepMind'
-    settings['optimizer'] = 'Adam'
-    #settings['optimizer'] = 'RMSProp'
+    #settings['optimizer'] = 'Adam'
+    settings['optimizer'] = 'RMSProp'
     #settings['tie_break_qvalues'] = True
+    #settings['ndimage.zoom'] = True
 
-    settings['use_gpu_replay_mem'] = True           # Whether to store replay memory in gpu or not to speed up leraning
-    #settings['use_gpu_replay_mem'] = False
+    #settings['use_gpu_replay_mem'] = True           # Whether to store replay memory in gpu or not to speed up leraning
+    settings['use_gpu_replay_mem'] = False
 
     """
     # Double DQN hyper params
@@ -452,17 +578,26 @@ if __name__ == '__main__':
     """
     # Prioritized experience replay params for PROPORTION
     settings['prioritized_replay'] = True
-    #settings['learning_rate'] = 0.00025 / 4
-    settings['learning_rate'] = 0.00025 * 5
+    settings['learning_rate'] = 0.00025 / 4
+    #settings['learning_rate'] = 0.00025 * 5
     settings['prioritized_mode'] = 'PROPORTION'
     settings['sampling_alpha'] = 0.6
     settings['sampling_beta'] = 0.4
     settings['heap_sort_term'] = 250000
     """
+
+    """    
+    # Asynchronous RL
+    settings['train_start'] = settings['train_batch_size'] + settings['screen_history'] - 1 
+    settings['max_replay_memory'] = settings['train_start'] + 100
+    settings['minibatch_random'] = False
+    settings['multi_process_no'] = 8
+    settings['multi_process_copy_step'] = 1
+    """
     
     dataFile = None    
     #dataFile = 'snapshot/breakout/dqn_neon_3100000.prm'
-    #dataFile = 'snapshot/%s/%s' % (settings['game'], '20160903_110714/dqn_1250000')
+    #dataFile = 'snapshot/%s/%s' % (settings['game'], '20160831_200101/dqn_200000')
     
     train(settings, dataFile)
-    #play(dataFile)
+    #play(settings, dataFile)
