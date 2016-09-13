@@ -16,7 +16,7 @@ class ModelRunnerTF():
         self.updateStep = settings['update_step']
         self.maxActionNo = maxActionNo
         self.be = None
-        self.historyBuffer = np.zeros(batchDimension, dtype=np.float32)
+        self.historyBuffer = np.zeros((1, batchDimension[1], batchDimension[2], batchDimension[3]), dtype=np.float32)
         self.actionMat = np.zeros((self.trainBatchSize, self.maxActionNo))
 
         # input placeholders
@@ -211,7 +211,6 @@ class ModelRunnerTF():
             # biases = tf.Variable(tf.fill([shape[-1]], 0.1), name=(name + "_biases"))
             biases = self.get_biases(shape, name)
 
-
             activation = tf.matmul(policy_input, weights) + biases
 
             target_weights = tf.Variable(weights.initialized_value(), trainable=False, name=("target_" + name + "_weights"))
@@ -234,11 +233,8 @@ class ModelRunnerTF():
         Args:
             observation: the observation
         '''
-        a = self.sess.run(self.policy_q_layer, feed_dict={self.observation:historyBuffer.transpose(0, 2, 3, 1)})
-        b = np.squeeze(a)
-        return b
-
-
+        return self.sess.run(self.policy_q_layer, feed_dict={self.observation:historyBuffer.transpose(0, 2, 3, 1)})[0]
+        
     def build_loss(self, error_clip, num_actions, double_dqn):
         ''' build loss graph '''
         with tf.name_scope("loss"):

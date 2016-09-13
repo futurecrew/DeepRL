@@ -234,19 +234,16 @@ class DeepRLPlayer:
         print 'Generating %s replay memory' % count
         startTime = time.time()
         self.resetGame()
-        for i in range(count):
+        for _ in range(count):
             actionIndex, greedyEpsilon, type = self.getActionFromModel('TRAIN')
-            
             reward, state, lostLife, gameOver = self.doActions(actionIndex, 'TRAIN')
-
             self.replayMemory.add(actionIndex, reward, state, lostLife)
-                
             self.modelRunner.addToHistoryBuffer(state)
                 
             if(gameOver):
                 self.resetGame()
         
-        print 'Genrating took %.0f sec' % (time.time() - startTime)
+        print 'Generating replay memory took %.0f sec' % (time.time() - startTime)
         
     def test(self, epoch):
         episode = 0
@@ -363,7 +360,7 @@ class DeepRLPlayer:
         with open(fileName + '.pickle', 'wb') as f:
             pickle.dump(self, f)
             self.modelRunner.save(fileName + '.weight')
-            print '%s dumped' % fileName
+            #print '%s dumped' % fileName
         
     def __getstate__(self):
         self.replayMemoryNo = self.replayMemory.count
@@ -586,7 +583,7 @@ if __name__ == '__main__':
     settings['heap_sort_term'] = 250000
     """
 
-    """    
+    """
     # Asynchronous RL
     settings['train_start'] = settings['train_batch_size'] + settings['screen_history'] - 1 
     settings['max_replay_memory'] = settings['train_start'] + 100
