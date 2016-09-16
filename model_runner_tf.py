@@ -18,108 +18,51 @@ class ModelRunnerTF():
         self.be = None
         self.historyBuffer = np.zeros((1, batchDimension[1], batchDimension[2], batchDimension[3]), dtype=np.float32)
         self.actionMat = np.zeros((self.trainBatchSize, self.maxActionNo))
-
-        # input placeholders
-        self.observation = tf.placeholder(tf.float32, shape=[None, batchDimension[2], batchDimension[3], batchDimension[1]], name="observation")
-        self.actions = tf.placeholder(tf.float32, shape=[None, maxActionNo], name="actions") # one-hot matrix because tf.gather() doesn't support multidimensional indexing yet
-        self.rewards = tf.placeholder(tf.float32, shape=[None], name="rewards")
-        self.next_observation = tf.placeholder(tf.float32, shape=[None, batchDimension[2], batchDimension[3], batchDimension[1]], name="next_observation")
-        self.terminals = tf.placeholder(tf.float32, shape=[None], name="terminals")
-        self.normalized_observation = self.observation / 255.0
-        self.normalized_next_observation = self.next_observation / 255.0
-
-        conv_kernel_shapes = []
-        conv_kernel_shapes.append([8, 8, 4, 32])
-        conv_kernel_shapes.append([4, 4, 32,64])
-        conv_kernel_shapes.append([3, 3, 64, 64])
         
-        conv_strides = []
-        conv_strides.append([1, 4, 4, 1])
-        conv_strides.append([1, 2, 2, 1])
-        conv_strides.append([1, 1, 1, 1])
-        
-        dense_layer_shapes = []
-        dense_layer_shapes.append([7 * 7 * 64, 512])
-        
-        num_conv_layers = len(conv_kernel_shapes)
-        assert(num_conv_layers == len(conv_strides))
-        num_dense_layers = len(dense_layer_shapes)
-
-        last_policy_layer = None
-        last_target_layer = None
-        self.update_target = []
-        self.policy_network_params = []
-        self.param_names = []
-
-        # initialize convolutional layers
-        for layer in range(num_conv_layers):
-            policy_input = None
-            target_input = None
-            if layer == 0:
-                policy_input = self.normalized_observation
-                target_input = self.normalized_next_observation
-            else:
-                policy_input = last_policy_layer
-                target_input = last_target_layer
-
-            last_layers = self.conv_relu(policy_input, target_input, 
-                conv_kernel_shapes[layer], conv_strides[layer], layer)
-            last_policy_layer = last_layers[0]
-            last_target_layer = last_layers[1]
-
-        # initialize fully-connected layers
-        for layer in range(num_dense_layers):
-            policy_input = None
-            target_input = None
-            if layer == 0:
-                input_size = dense_layer_shapes[0][0]
-                policy_input = tf.reshape(last_policy_layer, shape=[-1, input_size])
-                target_input = tf.reshape(last_target_layer, shape=[-1, input_size])
-            else:
-                policy_input = last_policy_layer
-                target_input = last_target_layer
-
-            last_layers = self.dense_relu(policy_input, target_input, dense_layer_shapes[layer], layer)
-            last_policy_layer = last_layers[0]
-            last_target_layer = last_layers[1]
-
-
-        # initialize q_layer
-        last_layers = self.dense_linear(
-            last_policy_layer, last_target_layer, [dense_layer_shapes[-1][-1], maxActionNo])
-        self.policy_q_layer = last_layers[0]
-        self.target_q_layer = last_layers[1]
-
-        self.loss = self.build_loss(1.0, maxActionNo, False)
-
-        self.train_op = tf.train.RMSPropOptimizer(
-            settings['learning_rate'], decay=settings['rms_decay'], momentum=0.0, epsilon=0.01).minimize(self.loss)
-
-        self.saver = tf.train.Saver(self.policy_network_params)
-
-        """
-        if not args.watch:
-            param_hists = [tf.histogram_summary(name, param) for name, param in zip(self.param_names, self.policy_network_params)]
-            self.param_summaries = tf.merge_summary(param_hists)
-
-        # start tf session
-        gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.33333)  # avoid using all vram for GTX 970
-        self.sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-        """
         self.sess = tf.Session()
+        
+        self.x, self.y = self.buildNetwork('policy', True, maxActionNo)
+        assert (len(tf.trainable_variables()) == 10),"Expected 10 trainable_variables"
+        assert (len(tf.all_variables()) == 10),"Expected 10 total variables"
+        self.x_target, self.y_target = self.buildNetwork('target', False, maxActionNo)
+        assert (len(tf.trainable_variables()) == 10),"Expected 10 trainable_variables"
+        assert (len(tf.all_variables()) == 20),"Expected 20 total variables"
 
-        """
-        if args.watch:
-            print("Loading Saved Network...")
-            load_path = tf.train.latest_checkpoint(self.path)
-            self.saver.restore(self.sess, load_path)
-            print("Network Loaded")        
-        else:
-            self.sess.run(tf.initialize_all_variables())
-            print("Network Initialized")
-            self.summary_writer = tf.train.SummaryWriter('../records/' + args.game + '/' + args.agent_type + '/' + args.agent_name + '/params', self.sess.graph)
-        """
+        # build the variable copy ops
+        self.update_target = []
+        trainable_variables = tf.trainable_variables()
+        all_variables = tf.all_variables()
+        for i in range(0, len(trainable_variables)):
+            self.update_target.append(all_variables[len(trainable_variables) + i].assign(trainable_variables[i]))
+
+        self.a = tf.placeholder(tf.float32, shape=[None, maxActionNo])
+        print('a %s' % (self.a.get_shape()))
+        self.y_ = tf.placeholder(tf.float32, [None])
+        print('y_ %s' % (self.y_.get_shape()))
+
+        self.y_a = tf.reduce_sum(tf.mul(self.y, self.a), reduction_indices=1)
+        print('y_a %s' % (self.y_a.get_shape()))
+
+        difference = tf.abs(self.y_a - self.y_)
+        quadratic_part = tf.clip_by_value(difference, 0.0, 1.0)
+        linear_part = difference - quadratic_part
+        errors = (0.5 * tf.square(quadratic_part)) + linear_part
+        self.loss = tf.reduce_sum(errors)
+        #self.loss = tf.reduce_mean(tf.square(self.y_a - self.y_))
+
+        # (??) learning rate
+        # Note tried gradient clipping with rmsprop with this particular loss function and it seemed to suck
+        # Perhaps I didn't run it long enough
+        #optimizer = GradientClippingOptimizer(tf.train.RMSPropOptimizer(args.learning_rate, decay=.95, epsilon=.01))
+        optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+        self.train_step = optimizer.minimize(self.loss)
+
+        self.saver = tf.train.Saver(max_to_keep=25)
+
+        # Initialize variables
         self.sess.run(tf.initialize_all_variables())
+        self.sess.run(self.update_target) # is this necessary?
+
         print("Network Initialized")
 
     def addToHistoryBuffer(self, state):
@@ -129,135 +72,79 @@ class ModelRunnerTF():
     def clearHistoryBuffer(self):
         self.historyBuffer.fill(0)
 
-    def conv_relu(self, policy_input, target_input, kernel_shape, stride, layer_num):
-        ''' Build a convolutional layer
-        Args:
-            input_layer: input to convolutional layer - must be 4d
-            target_input: input to layer of target network - must also be 4d
-            kernel_shape: tuple for filter shape: (filter_height, filter_width, in_channels, out_channels)
-            stride: tuple for stride: (1, vert_stride. horiz_stride, 1)
-        '''
-        name = 'conv' + str(layer_num + 1)
-        with tf.variable_scope(name):
-
-            # weights = tf.Variable(tf.truncated_normal(kernel_shape, stddev=0.01), name=(name + "_weights"))
-            weights = self.get_weights(kernel_shape, name)
-            # biases = tf.Variable(tf.fill([kernel_shape[-1]], 0.1), name=(name + "_biases"))
-            biases = self.get_biases(kernel_shape, name)
-
-            activation = tf.nn.relu(tf.nn.conv2d(policy_input, weights, stride, 'VALID') + biases)
-
-            target_weights = tf.Variable(weights.initialized_value(), trainable=False, name=("target_" + name + "_weights"))
-            target_biases = tf.Variable(biases.initialized_value(), trainable=False, name=("target_" + name + "_biases"))
-
-            target_activation = tf.nn.relu(tf.nn.conv2d(target_input, target_weights, stride, 'VALID') + target_biases)
-
-            self.update_target.append(target_weights.assign(weights))
-            self.update_target.append(target_biases.assign(biases))
-
-            self.policy_network_params.append(weights)
-            self.policy_network_params.append(biases)
-            self.param_names.append(name + "_weights")
-            self.param_names.append(name + "_biases")
-
-            return [activation, target_activation]
-
-
-    def dense_relu(self, policy_input, target_input, shape, layer_num):
-        ''' Build a fully-connected relu layer 
-        Args:
-            input_layer: input to dense layer
-            target_input: input to layer of target network
-            shape: tuple for weight shape (num_input_nodes, num_layer_nodes)
-        '''
-        name = 'dense' + str(layer_num + 1)
-        with tf.variable_scope(name):
-
-            # weights = tf.Variable(tf.truncated_normal(shape, stddev=0.01), name=(name + "_weights"))
-            weights = self.get_weights(shape, name)
-            # biases = tf.Variable(tf.fill([shape[-1]], 0.1), name=(name + "_biases"))
-            biases = self.get_biases(shape, name)
-
-            activation = tf.nn.relu(tf.matmul(policy_input, weights) + biases)
-
-            target_weights = tf.Variable(weights.initialized_value(), trainable=False, name=("target_" + name + "_weights"))
-            target_biases = tf.Variable(biases.initialized_value(), trainable=False, name=("target_" + name + "_biases"))
-
-            target_activation = tf.nn.relu(tf.matmul(target_input, target_weights) + target_biases)
-
-            self.update_target.append(target_weights.assign(weights))
-            self.update_target.append(target_biases.assign(biases))
-
-            self.policy_network_params.append(weights)
-            self.policy_network_params.append(biases)
-            self.param_names.append(name + "_weights")
-            self.param_names.append(name + "_biases")
-
-            return [activation, target_activation]
-
-
-    def dense_linear(self, policy_input, target_input, shape):
-        ''' Build the fully-connected linear output layer 
-        Args:
-            input_layer: last hidden layer
-            target_input: last hidden layer of target network
-            shape: tuple for weight shape (num_input_nodes, num_actions)
-        '''
-        name = 'q_layer'
-        with tf.variable_scope(name):
-
-            # weights = tf.Variable(tf.truncated_normal(shape, stddev=0.01), name=(name + "_weights"))
-            weights = self.get_weights(shape, name)
-            # biases = tf.Variable(tf.fill([shape[-1]], 0.1), name=(name + "_biases"))
-            biases = self.get_biases(shape, name)
-
-            activation = tf.matmul(policy_input, weights) + biases
-
-            target_weights = tf.Variable(weights.initialized_value(), trainable=False, name=("target_" + name + "_weights"))
-            target_biases = tf.Variable(biases.initialized_value(), trainable=False, name=("target_" + name + "_biases"))
-
-            target_activation = tf.matmul(target_input, target_weights) + target_biases
-
-            self.update_target.append(target_weights.assign(weights))
-            self.update_target.append(target_biases.assign(biases))
-
-            self.policy_network_params.append(weights)
-            self.policy_network_params.append(biases)
-            self.param_names.append(name + "_weights")
-            self.param_names.append(name + "_biases")
-
-            return [activation, target_activation]
+    def buildNetwork(self, name, trainable, numActions):
         
+        print("Building network for %s trainable=%s" % (name, trainable))
+
+        # First layer takes a screen, and shrinks by 2x
+        x = tf.placeholder(tf.uint8, shape=[None, 84, 84, 4], name="screens")
+        print(x)
+
+        x_normalized = tf.to_float(x) / 255.0
+        print(x_normalized)
+
+        # Second layer convolves 32 8x8 filters with stride 4 with relu
+        with tf.variable_scope("cnn1_" + name):
+            W_conv1, b_conv1 = self.makeLayerVariables([8, 8, 4, 32], trainable, "conv1")
+
+            h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
+            print(h_conv1)
+
+        # Third layer convolves 64 4x4 filters with stride 2 with relu
+        with tf.variable_scope("cnn2_" + name):
+            W_conv2, b_conv2 = self.makeLayerVariables([4, 4, 32, 64], trainable, "conv2")
+
+            h_conv2 = tf.nn.relu(tf.nn.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2, name="h_conv2")
+            print(h_conv2)
+
+        # Fourth layer convolves 64 3x3 filters with stride 1 with relu
+        with tf.variable_scope("cnn3_" + name):
+            W_conv3, b_conv3 = self.makeLayerVariables([3, 3, 64, 64], trainable, "conv3")
+
+            h_conv3 = tf.nn.relu(tf.nn.conv2d(h_conv2, W_conv3, strides=[1, 1, 1, 1], padding='VALID') + b_conv3, name="h_conv3")
+            print(h_conv3)
+
+        h_conv3_flat = tf.reshape(h_conv3, [-1, 7 * 7 * 64], name="h_conv3_flat")
+        print(h_conv3_flat)
+
+        # Fifth layer is fully connected with 512 relu units
+        with tf.variable_scope("fc1_" + name):
+            W_fc1, b_fc1 = self.makeLayerVariables([7 * 7 * 64, 512], trainable, "fc1")
+
+            h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat, W_fc1) + b_fc1, name="h_fc1")
+            print(h_fc1)
+
+        # Sixth (Output) layer is fully connected linear layer
+        with tf.variable_scope("fc2_" + name):
+            W_fc2, b_fc2 = self.makeLayerVariables([512, numActions], trainable, "fc2")
+
+            y = tf.matmul(h_fc1, W_fc2) + b_fc2
+            print(y)
+            
+        return x, y
+
+    def makeLayerVariables(self, shape, trainable, name_suffix):
+        stdv = 1.0 / math.sqrt(np.prod(shape[0:-1]))
+        weights = tf.Variable(tf.random_uniform(shape, minval=-stdv, maxval=stdv), trainable=trainable, name='W_' + name_suffix)
+        biases  = tf.Variable(tf.random_uniform([shape[-1]], minval=-stdv, maxval=stdv), trainable=trainable, name='W_' + name_suffix)
+        return weights, biases
+    
+    def clipReward(self, reward):
+            if reward > 0:
+                return 1
+            elif reward < 0:
+                return -1
+            else:
+                return 0
+
     def predict(self, historyBuffer):
         ''' Get state-action value predictions for an observation 
         Args:
             observation: the observation
         '''
-        return self.sess.run(self.policy_q_layer, feed_dict={self.observation:historyBuffer.transpose(0, 2, 3, 1)})[0]
+        return self.sess.run([self.y], {self.x: historyBuffer.transpose(0, 2, 3, 1)})[0]
+        #return self.sess.run(self.policy_q_layer, feed_dict={self.observation:historyBuffer.transpose(0, 2, 3, 1)})[0]
         
-    def build_loss(self, error_clip, num_actions, double_dqn):
-        ''' build loss graph '''
-        with tf.name_scope("loss"):
-
-            predictions = tf.reduce_sum(tf.mul(self.policy_q_layer, self.actions), 1)
-            
-            max_action_values = None
-            max_action_values = tf.reduce_max(self.target_q_layer, 1)
-
-            targets = tf.stop_gradient(self.rewards + (self.discountFactor * max_action_values * (1 - self.terminals)))
-
-            difference = tf.abs(predictions - targets)
-
-            if error_clip >= 0:
-                quadratic_part = tf.clip_by_value(difference, 0.0, error_clip)
-                linear_part = difference - quadratic_part
-                errors = (0.5 * tf.square(quadratic_part)) + (error_clip * linear_part)
-            else:
-                errors = (0.5 * tf.square(difference))
-
-            return tf.reduce_sum(errors)
-
-
     def train(self, minibatch, replayMemory, debug):
         if self.settings['prioritized_replay'] == True:
             prestates, actions, rewards, poststates, terminals, replayIndexes, heapIndexes, weights = minibatch
@@ -267,30 +154,31 @@ class ModelRunnerTF():
         self.actionMat.fill(0)
         for i in range(self.trainBatchSize):
             self.actionMat[i, actions[i]] = 1
+
+        y2 = self.y_target.eval(feed_dict={self.x_target: poststates.transpose(0, 2, 3, 1)}, session=self.sess)
+        if self.settings['double_dqn'] == True:
+            y3 = self.y.eval(feed_dict={self.x: poststates.transpose(0, 2, 3, 1)}, session=self.sess)
+
+        y_ = np.zeros(self.trainBatchSize)
         
-        loss = self.sess.run([self.train_op, self.loss], 
-            feed_dict={self.observation:prestates.transpose(0, 2, 3, 1), \
-                       self.actions:self.actionMat, \
-                       self.rewards:rewards, \
-                       self.next_observation:poststates.transpose(0, 2, 3, 1), \
-                       self.terminals:terminals})[1]
+        for i in range(0, self.trainBatchSize):
+            self.actionMat[i, actions[i]] = 1
+            clippedReward = self.clipReward(rewards[i])
+            if terminals[i]:
+                y_[i] = clippedReward
+            else:
+                if self.settings['double_dqn'] == True:
+                    maxIndex = np.argmax(y3[i])
+                    y_[i] = clippedReward + self.discountFactor * y2[i][maxIndex]
+                else:
+                    y_[i] = clippedReward + self.discountFactor * np.max(y2[i])
 
-        return loss
+        self.train_step.run(feed_dict={
+            self.x: prestates.transpose(0, 2, 3, 1),
+            self.a: self.actionMat,
+            self.y_: y_
+        }, session=self.sess)
 
-    def get_weights(self, shape, name):
-        fan_in = np.prod(shape[0:-1])
-        std = 1 / math.sqrt(fan_in)
-        return tf.Variable(tf.random_uniform(shape, minval=(-std), maxval=std), name=(name + "_weights"))
-
-    def get_biases(self, shape, name):
-        fan_in = np.prod(shape[0:-1])
-        std = 1 / math.sqrt(fan_in)
-        return tf.Variable(tf.random_uniform([shape[-1]], minval=(-std), maxval=std), name=(name + "_biases"))
-
-    def record_params(self, step):
-        summary_string = self.sess.run(self.param_summaries)
-        self.summary_writer.add_summary(summary_string, step)
-        
     def updateModel(self):
         self.sess.run(self.update_target)
 

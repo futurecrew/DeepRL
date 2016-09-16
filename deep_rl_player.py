@@ -13,10 +13,9 @@ import pickle
 import threading
 import time
 import util
+import png
 from multiprocessing import Process, Queue
 #from model_runner import ModelRunner
-from model_runner_neon import ModelRunnerNeon
-from model_runner_tf import ModelRunnerTF
 from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
 
@@ -24,6 +23,7 @@ class DeepRLPlayer:
     def __init__(self, settings, playFile=None, processNo=None, queueList=None, sharedData=None):
         self.settings = settings
         self.playFile = playFile
+        self.currentState = None
         self.processNo = processNo
         self.queueList = queueList
         self.sharedData = sharedData
@@ -39,6 +39,7 @@ class DeepRLPlayer:
                                       self.settings['screen_height'], 
                                       self.settings['screen_width'])
 
+        self.frameNumber = 0
         self.trainStep = 0
         self.epochDone = 0
         self.trainStart = time.strftime('%Y%m%d_%H%M%S')
@@ -111,12 +112,14 @@ class DeepRLPlayer:
     def initializeModel(self):
         #self.modelRunner = ModelRunner(
         if self.settings['backend'] == 'NEON':
+            from model_runner_neon import ModelRunnerNeon
             self.modelRunner = ModelRunnerNeon(
                                     self.settings, 
                                     maxActionNo = len(self.legalActions),
                                     batchDimension = self.batchDimension
                                     )
         elif self.settings['backend'] == 'TF':
+            from model_runner_tf import ModelRunnerTF
             self.modelRunner = ModelRunnerTF(
                                     self.settings, 
                                     maxActionNo = len(self.legalActions),
@@ -178,14 +181,21 @@ class DeepRLPlayer:
     def resetGame(self):
         self.modelRunner.clearHistoryBuffer()
         self.ale.reset_game()
-        for r in range(random.randint(4, 30)):
-            reward, state, lostLife, gameOver = self.doActions(0, 'TRAIN')
+        self.currentState = None
+        for _ in range(random.randint(4, 30)):
+            reward, state, terminal, gameOver = self.doActions(0, 'TRAIN')
             self.modelRunner.addToHistoryBuffer(state)
+    
+    def saveScreenAsPNG(self, basefilename, screen, frameNumber):
+        pngfile = open(basefilename + ('-%08d.png' % frameNumber), 'wb')
+        pngWriter = png.Writer(screen.shape[1], screen.shape[0], greyscale=True)
+        pngWriter.write(pngfile, screen)
+        pngfile.close()
 
     def doActions(self, actionIndex, mode):
         action = self.legalActions[actionIndex]
         reward = 0
-        lostLife = False 
+        terminal = False 
         lives = self.ale.lives()
         frameRepeat = self.settings['frame_repeat']
 
@@ -197,7 +207,7 @@ class DeepRLPlayer:
                 state = self.ale.getScreenRGB()
                 gameOver = self.ale.game_over()
                 if self.ale.lives() < lives or gameOver:
-                    lostLife = True
+                    terminal = True
                     if mode == 'TRAIN' and self.settings['lost_life_game_over'] == True:
                         gameOver = True
                     break
@@ -206,29 +216,23 @@ class DeepRLPlayer:
             screen = np.dot(maxState, np.array([.299, .587, .114])).astype(np.uint8)
             screen = ndimage.zoom(screen, (0.4, 0.525))
             screen.resize((84, 84))
-                           
-            return reward, screen, lostLife, gameOver
+            return reward, screen, terminal, gameOver
         else:
-            prevStateVisited = False
-            for f in range(frameRepeat):
-                if f == frameRepeat - 2:
-                    prevState = self.ale.getScreenGrayscale()
-                    prevStateVisited = True
+            if self.currentState is None:
+                self.currentState = self.ale.getScreenGrayscale()
+            for _ in range(frameRepeat):
+                prevState = self.currentState
                 reward += self.ale.act(action)
+                self.currentState = self.ale.getScreenGrayscale()
                 gameOver = self.ale.game_over()
                 if self.ale.lives() < lives or gameOver:
-                    lostLife = True
+                    terminal = True
                     if mode == 'TRAIN' and self.settings['lost_life_game_over'] == True:
                         gameOver = True
                     break
-            state = self.ale.getScreenGrayscale()
-            if prevStateVisited:
-                maxState = np.maximum(prevState, state)
-            else:
-                maxState = state
-            
+            maxState = np.maximum(prevState, self.currentState)
             resized = cv2.resize(maxState, (84, 84))
-            return reward, resized, lostLife, gameOver
+            return reward, resized, terminal, gameOver
     
     def generateReplayMemory(self, count):
         print 'Generating %s replay memory' % count
@@ -236,8 +240,8 @@ class DeepRLPlayer:
         self.resetGame()
         for _ in range(count):
             actionIndex, greedyEpsilon, type = self.getActionFromModel('TRAIN')
-            reward, state, lostLife, gameOver = self.doActions(actionIndex, 'TRAIN')
-            self.replayMemory.add(actionIndex, reward, state, lostLife)
+            reward, state, terminal, gameOver = self.doActions(actionIndex, 'TRAIN')
+            self.replayMemory.add(actionIndex, reward, state, terminal)
             self.modelRunner.addToHistoryBuffer(state)
                 
             if(gameOver):
@@ -255,7 +259,7 @@ class DeepRLPlayer:
         for stepNo in range(self.settings['test_step']):
             actionIndex, greedyEpsilon, actionType = self.getActionFromModel('TEST')
                 
-            reward, state, lostLife, gameOver = self.doActions(actionIndex, 'TEST')
+            reward, state, terminal, gameOver = self.doActions(actionIndex, 'TEST')
                 
             episodeReward += reward
 
@@ -299,12 +303,12 @@ class DeepRLPlayer:
             for stepNo in range(self.settings['epoch_step']):
                 actionIndex, greedyEpsilon, type = self.getActionFromModel('TRAIN')
                 
-                reward, state, lostLife, gameOver = self.doActions(actionIndex, 'TRAIN')
+                reward, state, terminal, gameOver = self.doActions(actionIndex, 'TRAIN')
 
                 episodeTotalReward += reward
                 epochTotalReward += reward
 
-                self.replayMemory.add(actionIndex, reward, state, lostLife)
+                self.replayMemory.add(actionIndex, reward, state, terminal)
                     
                 if stepNo % self.settings['train_step'] == 0:
                     minibatch = self.replayMemory.getMinibatch()
@@ -497,21 +501,16 @@ if __name__ == '__main__':
     settings = {}
 
     #settings['game'] = 'breakout'
-    #settings['game'] = 'space_invaders'
+    settings['game'] = 'space_invaders'
     #settings['game'] = 'enduro'
-    settings['game'] = 'kung_fu_master'
+    #settings['game'] = 'kung_fu_master'
     #settings['game'] = 'krull'
     #settings['game'] = 'hero'
     #settings['game'] = 'qbert'
     #settings['game'] = 'time_pilot'
 
     settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']    
-    settings['frame_repeat'] = 4
-    
-    if settings['game'] == 'space_invaders':
-        settings['frame_repeat'] = 3
-
-    #settings['show_screen'] = True
+    settings['frame_repeat'] = 4    
     settings['show_screen'] = False
     settings['use_keyboard'] = False
     settings['train_batch_size'] = 32
@@ -532,6 +531,7 @@ if __name__ == '__main__':
     settings['learning_rate'] = 0.00025
     settings['rms_decay'] = 0.95
     settings['lost_life_game_over'] = True
+    #settings['lost_life_game_over'] = False
     settings['update_step_in_stepNo'] = True
     settings['double_dqn'] = False
     settings['prioritized_replay'] = False
@@ -542,13 +542,11 @@ if __name__ == '__main__':
     #settings['backend'] = 'NEON'
     settings['backend'] = 'TF'
     
+    settings['use_self.currentState'] = True
     settings['use_successive_two_frames'] = True
     settings['dnn_initializer'] = 'fan_in'
     #settings['dnn_initializer'] = 'xavier'
-    #settings['optimizer'] = 'RMSPropDeepMind'
-    #settings['optimizer'] = 'Adam'
     settings['optimizer'] = 'RMSProp'
-    #settings['tie_break_qvalues'] = True
     #settings['ndimage.zoom'] = True
 
     #settings['use_gpu_replay_mem'] = True           # Whether to store replay memory in gpu or not to speed up leraning
