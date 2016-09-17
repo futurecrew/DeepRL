@@ -468,6 +468,7 @@ if __name__ == '__main__':
     #settings['use_gpu_replay_mem'] = True           # Whether to store replay memory in gpu or not to speed up leraning
     settings['use_gpu_replay_mem'] = False
 
+    
     # Double DQN hyper params
     settings['double_dqn'] = True
     settings['train_min_epsilon'] = 0.01
@@ -481,6 +482,7 @@ if __name__ == '__main__':
     settings['sampling_alpha'] = 0.7
     settings['sampling_beta'] = 0.5
     settings['heap_sort_term'] = 250000
+    
 
     """
     # Prioritized experience replay params for PROPORTION
@@ -492,13 +494,14 @@ if __name__ == '__main__':
     settings['sampling_beta'] = 0.4
     settings['heap_sort_term'] = 250000
     """
+    
     """
     # Asynchronous RL
     settings['train_start'] = settings['train_batch_size'] + settings['screen_history'] - 1 
     settings['max_replay_memory'] = settings['train_start'] + 100
     settings['minibatch_random'] = False
-    settings['multi_thread_no'] = 3
-    settings['multi_thread_copy_step'] = 1
+    settings['multi_thread_no'] = 2
+    settings['multi_thread_sync_step'] = 10
     """
     
     data_file = None    

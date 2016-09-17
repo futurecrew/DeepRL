@@ -151,8 +151,8 @@ class ModelRunnerNeon():
                 label[actions[i], i] = self.clip_reward(rewards[i])
             else:
                 if self.settings['double_dqn'] == True:
-                    maxIndex = np.argmax(post_qvalue2[i])
-                    label[actions[i], i] = self.clip_reward(rewards[i]) + self.discount_factor* post_qvalue[i][maxIndex]
+                    max_index = np.argmax(post_qvalue2[i])
+                    label[actions[i], i] = self.clip_reward(rewards[i]) + self.discount_factor* post_qvalue[i][max_index]
                 else:
                     label[actions[i], i] = self.clip_reward(rewards[i]) + self.discount_factor* np.max(post_qvalue[i])
 
