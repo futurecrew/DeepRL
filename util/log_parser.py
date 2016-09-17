@@ -1,6 +1,6 @@
-logFile = 'output/space_invaders_20160901_204149.log'
+log_file = 'output/space_invaders_20160916_192727.log'
 
-for oneLine in open(logFile, 'r'):
-    if oneLine.startswith('[ Test '):
-        data = oneLine.split('avg score: ')[1]
+for one_line in open(log_file, 'r'):
+    if one_line.startswith('[ Test '):
+        data = one_line.split('avg score: ')[1]
         print data.split('. elapsed')[0]

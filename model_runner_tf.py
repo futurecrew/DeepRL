@@ -8,23 +8,26 @@ import traceback
 import pickle
 import tensorflow as tf
 
+#globalSess = tf.Session()
+
 class ModelRunnerTF():
-    def __init__(self, settings,  maxActionNo, batchDimension):
+    def __init__(self, settings,  max_action_no, batch_dimension):
+        global globalSess
+        
         self.settings = settings
-        self.trainBatchSize = settings['train_batch_size']
-        self.discountFactor = settings['discount_factor']
-        self.updateStep = settings['update_step']
-        self.maxActionNo = maxActionNo
+        self.train_batch_size = settings['train_batch_size']
+        self.discount_factor = settings['discount_factor']
+        self.max_action_no = max_action_no
         self.be = None
-        self.historyBuffer = np.zeros((1, batchDimension[1], batchDimension[2], batchDimension[3]), dtype=np.float32)
-        self.actionMat = np.zeros((self.trainBatchSize, self.maxActionNo))
+        self.history_buffer = np.zeros((1, batch_dimension[1], batch_dimension[2], batch_dimension[3]), dtype=np.float32)
+        self.action_mat = np.zeros((self.train_batch_size, self.max_action_no))
         
         self.sess = tf.Session()
         
-        self.x, self.y = self.buildNetwork('policy', True, maxActionNo)
+        self.x, self.y = self.build_network('policy', True, max_action_no)
         assert (len(tf.trainable_variables()) == 10),"Expected 10 trainable_variables"
         assert (len(tf.all_variables()) == 10),"Expected 10 total variables"
-        self.x_target, self.y_target = self.buildNetwork('target', False, maxActionNo)
+        self.x_target, self.y_target = self.build_network('target', False, max_action_no)
         assert (len(tf.trainable_variables()) == 10),"Expected 10 trainable_variables"
         assert (len(tf.all_variables()) == 20),"Expected 20 total variables"
 
@@ -35,7 +38,7 @@ class ModelRunnerTF():
         for i in range(0, len(trainable_variables)):
             self.update_target.append(all_variables[len(trainable_variables) + i].assign(trainable_variables[i]))
 
-        self.a = tf.placeholder(tf.float32, shape=[None, maxActionNo])
+        self.a = tf.placeholder(tf.float32, shape=[None, max_action_no])
         print('a %s' % (self.a.get_shape()))
         self.y_ = tf.placeholder(tf.float32, [None])
         print('y_ %s' % (self.y_.get_shape()))
@@ -65,14 +68,14 @@ class ModelRunnerTF():
 
         print("Network Initialized")
 
-    def addToHistoryBuffer(self, state):
-        self.historyBuffer[0, :-1] = self.historyBuffer[0, 1:]
-        self.historyBuffer[0, -1] = state
+    def add_to_history_buffer(self, state):
+        self.history_buffer[0, :-1] = self.history_buffer[0, 1:]
+        self.history_buffer[0, -1] = state
 
-    def clearHistoryBuffer(self):
-        self.historyBuffer.fill(0)
+    def clear_history_buffer(self):
+        self.history_buffer.fill(0)
 
-    def buildNetwork(self, name, trainable, numActions):
+    def build_network(self, name, trainable, num_actions):
         
         print("Building network for %s trainable=%s" % (name, trainable))
 
@@ -85,21 +88,21 @@ class ModelRunnerTF():
 
         # Second layer convolves 32 8x8 filters with stride 4 with relu
         with tf.variable_scope("cnn1_" + name):
-            W_conv1, b_conv1 = self.makeLayerVariables([8, 8, 4, 32], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 32], trainable, "conv1")
 
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
 
         # Third layer convolves 64 4x4 filters with stride 2 with relu
         with tf.variable_scope("cnn2_" + name):
-            W_conv2, b_conv2 = self.makeLayerVariables([4, 4, 32, 64], trainable, "conv2")
+            W_conv2, b_conv2 = self.make_layer_variables([4, 4, 32, 64], trainable, "conv2")
 
             h_conv2 = tf.nn.relu(tf.nn.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2, name="h_conv2")
             print(h_conv2)
 
         # Fourth layer convolves 64 3x3 filters with stride 1 with relu
         with tf.variable_scope("cnn3_" + name):
-            W_conv3, b_conv3 = self.makeLayerVariables([3, 3, 64, 64], trainable, "conv3")
+            W_conv3, b_conv3 = self.make_layer_variables([3, 3, 64, 64], trainable, "conv3")
 
             h_conv3 = tf.nn.relu(tf.nn.conv2d(h_conv2, W_conv3, strides=[1, 1, 1, 1], padding='VALID') + b_conv3, name="h_conv3")
             print(h_conv3)
@@ -109,27 +112,27 @@ class ModelRunnerTF():
 
         # Fifth layer is fully connected with 512 relu units
         with tf.variable_scope("fc1_" + name):
-            W_fc1, b_fc1 = self.makeLayerVariables([7 * 7 * 64, 512], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([7 * 7 * 64, 512], trainable, "fc1")
 
             h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat, W_fc1) + b_fc1, name="h_fc1")
             print(h_fc1)
 
         # Sixth (Output) layer is fully connected linear layer
         with tf.variable_scope("fc2_" + name):
-            W_fc2, b_fc2 = self.makeLayerVariables([512, numActions], trainable, "fc2")
+            W_fc2, b_fc2 = self.make_layer_variables([512, num_actions], trainable, "fc2")
 
             y = tf.matmul(h_fc1, W_fc2) + b_fc2
             print(y)
             
         return x, y
 
-    def makeLayerVariables(self, shape, trainable, name_suffix):
+    def make_layer_variables(self, shape, trainable, name_suffix):
         stdv = 1.0 / math.sqrt(np.prod(shape[0:-1]))
         weights = tf.Variable(tf.random_uniform(shape, minval=-stdv, maxval=stdv), trainable=trainable, name='W_' + name_suffix)
         biases  = tf.Variable(tf.random_uniform([shape[-1]], minval=-stdv, maxval=stdv), trainable=trainable, name='W_' + name_suffix)
         return weights, biases
     
-    def clipReward(self, reward):
+    def clip_reward(self, reward):
             if reward > 0:
                 return 1
             elif reward < 0:
@@ -137,54 +140,49 @@ class ModelRunnerTF():
             else:
                 return 0
 
-    def predict(self, historyBuffer):
-        ''' Get state-action value predictions for an observation 
-        Args:
-            observation: the observation
-        '''
-        return self.sess.run([self.y], {self.x: historyBuffer.transpose(0, 2, 3, 1)})[0]
-        #return self.sess.run(self.policy_q_layer, feed_dict={self.observation:historyBuffer.transpose(0, 2, 3, 1)})[0]
+    def predict(self, history_buffer):
+        return self.sess.run([self.y], {self.x: history_buffer.transpose(0, 2, 3, 1)})[0]
         
     def train(self, minibatch, replayMemory, debug):
         if self.settings['prioritized_replay'] == True:
-            prestates, actions, rewards, poststates, terminals, replayIndexes, heapIndexes, weights = minibatch
+            prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
         else:
             prestates, actions, rewards, poststates, terminals = minibatch
         
-        self.actionMat.fill(0)
-        for i in range(self.trainBatchSize):
-            self.actionMat[i, actions[i]] = 1
+        self.action_mat.fill(0)
+        for i in range(self.train_batch_size):
+            self.action_mat[i, actions[i]] = 1
 
         y2 = self.y_target.eval(feed_dict={self.x_target: poststates.transpose(0, 2, 3, 1)}, session=self.sess)
         if self.settings['double_dqn'] == True:
             y3 = self.y.eval(feed_dict={self.x: poststates.transpose(0, 2, 3, 1)}, session=self.sess)
 
-        y_ = np.zeros(self.trainBatchSize)
+        y_ = np.zeros(self.train_batch_size)
         
-        for i in range(0, self.trainBatchSize):
-            self.actionMat[i, actions[i]] = 1
-            clippedReward = self.clipReward(rewards[i])
+        for i in range(0, self.train_batch_size):
+            self.action_mat[i, actions[i]] = 1
+            clipped_reward = self.clip_reward(rewards[i])
             if terminals[i]:
-                y_[i] = clippedReward
+                y_[i] = clipped_reward
             else:
                 if self.settings['double_dqn'] == True:
                     maxIndex = np.argmax(y3[i])
-                    y_[i] = clippedReward + self.discountFactor * y2[i][maxIndex]
+                    y_[i] = clipped_reward + self.discount_factor * y2[i][maxIndex]
                 else:
-                    y_[i] = clippedReward + self.discountFactor * np.max(y2[i])
+                    y_[i] = clipped_reward + self.discount_factor * np.max(y2[i])
 
         self.train_step.run(feed_dict={
             self.x: prestates.transpose(0, 2, 3, 1),
-            self.a: self.actionMat,
+            self.a: self.action_mat,
             self.y_: y_
         }, session=self.sess)
 
-    def updateModel(self):
+    def update_model(self):
         self.sess.run(self.update_target)
 
     def load(self, fileName):
         self.saver.restore(self.sess, fileName)
-        self.updateModel()
+        self.update_model()
         
     def save(self, fileName):
         self.saver.save(self.sess, fileName)

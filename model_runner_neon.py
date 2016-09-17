@@ -17,44 +17,39 @@ from neon.optimizers import RMSProp, Adam, Schedule
 from neon.optimizers.optimizer import Optimizer, get_param_list
 
 class ModelRunnerNeon():
-    def __init__(self, settings,  maxActionNo, batchDimension):
+    def __init__(self, settings,  max_action_no, batch_dimension):
         self.settings = settings
-        self.trainBatchSize = settings['train_batch_size']
-        self.discountFactor = settings['discount_factor']
-        self.updateStep = settings['update_step']
-        self.useGpuReplayMem = settings['use_gpu_replay_mem']
+        self.train_batch_size = settings['train_batch_size']
+        self.discount_factor = settings['discount_factor']
+        self.use_gpu_replay_mem = settings['use_gpu_replay_mem']
         
         self.be = gen_backend(backend='gpu',             
-                         batch_size=self.trainBatchSize)
+                         batch_size=self.train_batch_size)
 
-        self.inputShape = (batchDimension[1], batchDimension[2], batchDimension[3], batchDimension[0])
-        self.input = self.be.empty(self.inputShape)
-        self.input.lshape = self.inputShape # HACK: needed for convolutional networks
-        self.targets = self.be.empty((maxActionNo, self.trainBatchSize))
+        self.input_shape = (batch_dimension[1], batch_dimension[2], batch_dimension[3], batch_dimension[0])
+        self.input = self.be.empty(self.input_shape)
+        self.input.lshape = self.input_shape # HACK: needed for convolutional networks
+        self.targets = self.be.empty((max_action_no, self.train_batch_size))
 
-        if self.useGpuReplayMem:
-            self.historyBuffer = self.be.zeros(batchDimension, dtype=np.uint8)
-            self.input_uint8 = self.be.empty(self.inputShape, dtype=np.uint8)
+        if self.use_gpu_replay_mem:
+            self.history_buffer = self.be.zeros(batch_dimension, dtype=np.uint8)
+            self.input_uint8 = self.be.empty(self.input_shape, dtype=np.uint8)
         else:
-            self.historyBuffer = np.zeros(batchDimension, dtype=np.float32)
+            self.history_buffer = np.zeros(batch_dimension, dtype=np.float32)
 
-        self.trainNet = Model(self.createLayers(maxActionNo))
+        self.train_net = Model(self.create_layers(max_action_no))
         self.cost = GeneralizedCost(costfunc=SumSquared())
         # Bug fix
-        for l in self.trainNet.layers.layers:
+        for l in self.train_net.layers.layers:
             l.parallelism = 'Disabled'
-        self.trainNet.initialize(self.inputShape[:-1], self.cost)
+        self.train_net.initialize(self.input_shape[:-1], self.cost)
         
-        self.targetNet = Model(self.createLayers(maxActionNo))
+        self.target_net = Model(self.create_layers(max_action_no))
         # Bug fix
-        for l in self.targetNet.layers.layers:
+        for l in self.target_net.layers.layers:
             l.parallelism = 'Disabled'
-        self.targetNet.initialize(self.inputShape[:-1])
+        self.target_net.initialize(self.input_shape[:-1])
 
-        if self.settings['optimizer'] == 'RMSPropDeepMind':		# RMSPropDeepMind
-            self.optimizer = RMSPropDeepMind(decay_rate=settings['rms_decay'],
-                                            learning_rate=settings['learning_rate'],
-                                            epsilon=0.01)
         if self.settings['optimizer'] == 'Adam':        # Adam
             self.optimizer = Adam(beta_1=settings['rms_decay'],
                                             beta_2=settings['rms_decay'],
@@ -63,57 +58,55 @@ class ModelRunnerNeon():
             self.optimizer = RMSProp(decay_rate=settings['rms_decay'],
                                             learning_rate=settings['learning_rate'])
 
-        self.newParamArrived = False
-        self.maxActionNo = maxActionNo
+        self.max_action_no = max_action_no
         self.running = True
-        self.blankLabel = np.zeros((self.trainBatchSize, self.maxActionNo), dtype=np.float32)
 
-    def addToHistoryBuffer(self, state):
-        if self.useGpuReplayMem:
-            self.historyBuffer[0, :-1][:] = self.historyBuffer[0, 1:]
-            self.historyBuffer[0, -1][:] = state
+    def add_to_history_buffer(self, state):
+        if self.use_gpu_replay_mem:
+            self.history_buffer[0, :-1][:] = self.history_buffer[0, 1:]
+            self.history_buffer[0, -1][:] = state
         else:
-            self.historyBuffer[0, :-1] = self.historyBuffer[0, 1:]
-            self.historyBuffer[0, -1] = state
+            self.history_buffer[0, :-1] = self.history_buffer[0, 1:]
+            self.history_buffer[0, -1] = state
 
-    def clearHistoryBuffer(self):
-        if self.useGpuReplayMem:
-            self.historyBuffer[:] = 0
+    def clear_history_buffer(self):
+        if self.use_gpu_replay_mem:
+            self.history_buffer[:] = 0
         else:
-            self.historyBuffer.fill(0)
+            self.history_buffer.fill(0)
 
-    def getInitializer(self, inputSize):
+    def get_initializer(self, input_size):
         dnnInit = self.settings['dnn_initializer']
         if dnnInit == 'xavier':
             initializer = Xavier()
         elif dnnInit == 'fan_in':
-            stdDev = 1.0 / math.sqrt(inputSize)
-            initializer = Uniform(low=-stdDev, high=stdDev)
+            std_dev = 1.0 / math.sqrt(input_size)
+            initializer = Uniform(low=-std_dev, high=std_dev)
         else:
             initializer = Gaussian(0, 0.01)
         return initializer
             
-    def createLayers(self, maxActionNo):
+    def create_layers(self, max_action_no):
         layers = []
 
-        initializer = self.getInitializer(inputSize = 4 * 8 * 8)
+        initializer = self.get_initializer(input_size = 4 * 8 * 8)
         layers.append(Conv(fshape=(8, 8, 32), strides=4, init=initializer, bias=initializer, activation=Rectlin()))
 
-        initializer = self.getInitializer(inputSize = 32 * 4 * 4)
+        initializer = self.get_initializer(input_size = 32 * 4 * 4)
         layers.append(Conv(fshape=(4, 4, 64), strides=2, init=initializer, bias=initializer, activation=Rectlin()))
         
-        initializer = self.getInitializer(inputSize = 64 * 3 * 3)
+        initializer = self.get_initializer(input_size = 64 * 3 * 3)
         layers.append(Conv(fshape=(3, 3, 64), strides=1, init=initializer, bias=initializer, activation=Rectlin()))
         
-        initializer = self.getInitializer(inputSize = 7 * 7 * 64)
+        initializer = self.get_initializer(input_size = 7 * 7 * 64)
         layers.append(Affine(nout=512, init=initializer, bias=initializer, activation=Rectlin()))
         
-        initializer = self.getInitializer(inputSize = 512)
-        layers.append(Affine(nout=maxActionNo, init=initializer, bias=initializer))
+        initializer = self.get_initializer(input_size = 512)
+        layers.append(Affine(nout=max_action_no, init=initializer, bias=initializer))
         
         return layers        
         
-    def clipReward(self, reward):
+    def clip_reward(self, reward):
             if reward > 0:
                 return 1
             elif reward < 0:
@@ -121,189 +114,82 @@ class ModelRunnerNeon():
             else:
                 return 0
 
-    def setInput(self, data):
-        if self.useGpuReplayMem:
+    def set_input(self, data):
+        if self.use_gpu_replay_mem:
             self.be.copy_transpose(data, self.input_uint8, axes=(1, 2, 3, 0))
             self.input[:] = self.input_uint8 / 255
         else:
             self.input.set(data.transpose(1, 2, 3, 0).copy())
             self.be.divide(self.input, 255, self.input)
 
-    def getParams(self):
-        return self.trainNet.layers.get_description(get_weights=True,
-                                                     keep_states=False)
-                
-    def setParams(self, newParam):
-        self.newParam = newParam
-        self.newParamArrived = True 
-
-    def predict(self, historyBuffer):
-        self.setInput(historyBuffer)
-        output  = self.trainNet.fprop(self.input, inference=True)
+    def predict(self, history_buffer):
+        self.set_input(history_buffer)
+        output  = self.train_net.fprop(self.input, inference=True)
         return output.T.asnumpyarray()[0]            
 
-    def train(self, minibatch, replayMemory, debug):
-        if self.newParamArrived:
-            #start = time.time()
-            self.trainNet.layers.load_weights(self.newParam, False)
-            self.newParamArrived = False
-            #print 'modelRunner read new params took %.3fs' % (time.time() - start)
-            
+    def train(self, minibatch, replay_memory, debug):
         if self.settings['prioritized_replay'] == True:
-            prestates, actions, rewards, poststates, lostLives, replayIndexes, heapIndexes, weights = minibatch
+            prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
         else:
-            prestates, actions, rewards, poststates, lostLives = minibatch
+            prestates, actions, rewards, poststates, terminals = minibatch
         
         # Get Q*(s, a) with targetNet
-        self.setInput(poststates)
-        postQvalue = self.targetNet.fprop(self.input, inference=True).T.asnumpyarray()
+        self.set_input(poststates)
+        post_qvalue = self.target_net.fprop(self.input, inference=True).T.asnumpyarray()
         
         if self.settings['double_dqn'] == True:
             # Get Q*(s, a) with trainNet
-            postQvalue2 = self.trainNet.fprop(self.input, inference=True).T.asnumpyarray()
+            post_qvalue2 = self.train_net.fprop(self.input, inference=True).T.asnumpyarray()
         
         # Get Q(s, a) with trainNet
-        self.setInput(prestates)
-        preQvalue = self.trainNet.fprop(self.input, inference=False)
+        self.set_input(prestates)
+        pre_qvalue = self.train_net.fprop(self.input, inference=False)
         
-        label = preQvalue.asnumpyarray().copy()
-        for i in range(0, self.trainBatchSize):
-            if lostLives[i]:
-                label[actions[i], i] = self.clipReward(rewards[i])
+        label = pre_qvalue.asnumpyarray().copy()
+        for i in range(0, self.train_batch_size):
+            if terminals[i]:
+                label[actions[i], i] = self.clip_reward(rewards[i])
             else:
                 if self.settings['double_dqn'] == True:
-                    maxIndex = np.argmax(postQvalue2[i])
-                    label[actions[i], i] = self.clipReward(rewards[i]) + self.discountFactor* postQvalue[i][maxIndex]
+                    maxIndex = np.argmax(post_qvalue2[i])
+                    label[actions[i], i] = self.clip_reward(rewards[i]) + self.discount_factor* post_qvalue[i][maxIndex]
                 else:
-                    label[actions[i], i] = self.clipReward(rewards[i]) + self.discountFactor* np.max(postQvalue[i])
+                    label[actions[i], i] = self.clip_reward(rewards[i]) + self.discount_factor* np.max(post_qvalue[i])
 
         # copy targets to GPU memory
         self.targets.set(label)
     
-        delta = self.cost.get_errors(preQvalue, self.targets)
+        delta = self.cost.get_errors(pre_qvalue, self.targets)
         
         if self.settings['prioritized_replay'] == True:
-            deltaValue = delta.asnumpyarray()
-            for i in range(self.trainBatchSize):
+            delta_value = delta.asnumpyarray()
+            for i in range(self.train_batch_size):
                 if debug:
-                    print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], deltaValue[actions[i], i], weights[i] * deltaValue[actions[i], i]) 
-                replayMemory.updateTD(heapIndexes[i], abs(deltaValue[actions[i], i]))
-                deltaValue[actions[i], i] = weights[i] * deltaValue[actions[i], i]
+                    print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], delta_value[actions[i], i], weights[i] * delta_value[actions[i], i]) 
+                replay_memory.update_td(heap_indexes[i], abs(delta_value[actions[i], i]))
+                delta_value[actions[i], i] = weights[i] * delta_value[actions[i], i]
             if self.settings['use_priority_weight'] == True:
-                delta.set(deltaValue.copy())
-            #deltaValue2 = delta.asnumpyarray()
+                delta.set(delta_value.copy())
+            #delta_value2 = delta.asnumpyarray()
             #pass
             
         self.be.clip(delta, -1.0, 1.0, out = delta)        
-        self.trainNet.bprop(delta)
-        self.optimizer.optimize(self.trainNet.layers_to_optimize, epoch=0)
+        self.train_net.bprop(delta)
+        self.optimizer.optimize(self.train_net.layers_to_optimize, epoch=0)
 
-    def updateModel(self):
+    def update_model(self):
         # have to serialize also states for batch normalization to work
-        pdict = self.trainNet.get_description(get_weights=True, keep_states=True)
-        self.targetNet.deserialize(pdict, load_states=True)
+        pdict = self.train_net.get_description(get_weights=True, keep_states=True)
+        self.target_net.deserialize(pdict, load_states=True)
         #print ('Updated target model')
 
-    def finishTrain(self):
+    def finish_train(self):
         self.running = False
     
-    def load(self, fileName):
-        self.trainNet.load_params(fileName)
-        self.updateModel()
+    def load(self, file_name):
+        self.train_net.load_params(file_name)
+        self.update_model()
         
-    def save(self, fileName):
-        self.trainNet.save_params(fileName)
+    def save(self, file_name):
+        self.train_net.save_params(file_name)
         
-
-class RMSPropDeepMind(Optimizer):
-
-    """
-    Root Mean Square propagation DeepMind replicate.
-
-    Root Mean Square (RMS) propagation protects against vanishing and
-    exploding gradients. In RMSprop, the gradient is divided by a running
-    average of recent gradients. Given the parameters :math:`\\theta`, gradient :math:`\\nabla J`,
-    we keep a running average :math:`\\mu` of the last :math:`1/\\lambda` gradients squared.
-    The update equations are then given by
-
-    .. math::
-
-        \\mu' &= \\lambda\\mu + (1-\\lambda)(\\nabla J)
-        \\mu2' &= \\lambda\\mu2 + (1-\\lambda)(\\nabla J)^2
-
-    .. math::
-
-        # \\theta' &= \\theta - \\frac{\\alpha}{\\sqrt{\\mu + \\epsilon} + \\epsilon}\\nabla J
-        \\theta' &= \\theta - \\frac{\\alpha}{\\sqrt{\\mu2 - (\\mu)^2 + \\epsilon}}\\nabla J
-
-    where we use :math:`\\epsilon` as a (small) smoothing factor to prevent from dividing by zero.
-    """
-
-    def __init__(self, stochastic_round=False, decay_rate=0.95, learning_rate=2e-3, epsilon=1e-6,
-                 gradient_clip_norm=None, gradient_clip_value=None, name=None,
-                 schedule=Schedule()):
-        """
-        Class constructor.
-
-        Arguments:
-            stochastic_round (bool): Set this to True for stochastic rounding.
-                                     If False rounding will be to nearest.
-                                     If True will perform stochastic rounding using default width.
-                                     Only affects the gpu backend.
-            decay_rate (float): decay rate of states
-            learning_rate (float): the multiplication coefficent of updates
-            epsilon (float): smoothing epsilon to avoid divide by zeros
-            gradient_clip_norm (float, optional): Target gradient norm.
-                                                  Defaults to None.
-            gradient_clip_value (float, optional): Value to element-wise clip
-                                                   gradients.
-                                                   Defaults to None.
-            schedule (neon.optimizers.optimizer.Schedule, optional): Learning rate schedule.
-                                                                     Defaults to a constant.
-        Notes:
-            Only constant learning rate is supported currently.
-        """
-        super(RMSPropDeepMind, self).__init__(name=name)
-        self.state_list = None
-
-        self.epsilon = epsilon
-        self.decay_rate = decay_rate
-        self.learning_rate = learning_rate
-        self.schedule = schedule
-        self.gradient_clip_norm = gradient_clip_norm
-        self.gradient_clip_value = gradient_clip_value
-        self.stochastic_round = stochastic_round
-
-    def optimize(self, layer_list, epoch):
-        """
-        Apply the learning rule to all the layers and update the states.
-
-        Arguments:
-            layer_list (list): a list of Layer objects to optimize.
-            epoch (int): the current epoch, needed for the Schedule object.
-        """
-        lrate = self.schedule.get_learning_rate(self.learning_rate, epoch)
-        epsilon, decay = (self.epsilon, self.decay_rate)
-        param_list = get_param_list(layer_list)
-
-        scale_factor = self.clip_gradient_norm(param_list, self.gradient_clip_norm)
-
-        for (param, grad), states in param_list:
-
-            param.rounding = self.stochastic_round
-            if len(states) == 0:
-                states.append(self.be.zeros_like(grad))
-                states.append(self.be.zeros_like(grad))
-
-            grad = grad / self.be.bsz
-            grad = self.clip_gradient_value(grad, self.gradient_clip_value)
-
-            # update state
-            g = states[0]
-            g[:] = decay * g + grad * (1.0 - decay)
-            g2 = states[1]
-            g2[:] = decay * g2 + self.be.square(grad) * (1.0 - decay)
-
-            param[:] = param \
-                - (scale_factor * grad * lrate) / self.be.sqrt(g2 - self.be.square(g) + epsilon)
-

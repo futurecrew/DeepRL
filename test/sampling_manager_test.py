@@ -3,6 +3,7 @@ import random
 import time
 import numpy as np
 import unittest
+from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
 
 class TestSamplingManager(unittest.TestCase):
@@ -21,43 +22,45 @@ class TestSamplingManager(unittest.TestCase):
         if self.mode == 'PROPORTION':
             self.alpha = 0.6
             self.beta = 0.4
-            self.sortTerm = 250000
+            self.sort_term = 250000
         elif self.mode == 'RANK':
             self.alpha = 0.7
             self.beta = 0.5
-            self.sortTerm = 250000
+            self.sort_term = 250000
 
-    def checkHeapIndexListValidity(self, manager):
+    def check_heap_index_list_validity(self, manager):
         for i in range(1, len(manager.heap)):
-            replayIndex = manager.heap[i][0]
-            self.assertEquals(manager.heapIndexList[replayIndex], i)
+            replay_index = manager.heap[i][0]
+            self.assertEquals(manager.heap_index_list[replay_index], i)
 
-    def test_Add(self):
-        replayMemorySize = 3
+    def test_add(self):
+        replay_memory_size = 3
         totalList = [5, 10, 15, 100]
         
-        for dataLen in totalList:
-            #print 'dataLen : %s' % dataLen
-            manager = SamplingManager(replayMemorySize, 32, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
-            for i in range(dataLen):
+        for data_len in totalList:
+            #print 'data_len : %s' % data_len
+            uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+            manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, 32, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
                 manager.add(action=0, reward=0, screen=state, terminal=0)
 
-            dataLen2 = min(dataLen, replayMemorySize)            
-            self.assertEqual(manager.getHeapLength(), dataLen2)
-            self.assertEqual(manager.count, dataLen2)
+            data_len2 = min(data_len, replay_memory_size)            
+            self.assertEqual(manager.get_heap_length(), data_len2)
+            self.assertEqual(manager.count, data_len2)
                 
-            for replayIndex in range(dataLen2):
-                heapIndex = manager.heapIndexList[replayIndex]
-                heapItem = manager.get(heapIndex)
-                self.assertEqual(replayIndex, heapItem[0])
+            for replay_index in range(data_len2):
+                heap_index = manager.heap_index_list[replay_index]
+                heap_item = manager.get(heap_index)
+                self.assertEqual(replay_index, heap_item[0])
     
-    def atest_Add2(self):
-        replayMemorySize = 1000000
+    def atest_add2(self):
+        replay_memory_size = 1000000
         
         for t in range(2):
-            manager = SamplingManager(replayMemorySize, 32, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
+            uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+            manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, 32, 4, self.mode, self.alpha, self.beta, self.sort_term)
             for i in range(2200000):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -66,21 +69,22 @@ class TestSamplingManager(unittest.TestCase):
                 else:
                     manager.add(action=0, reward=0, screen=state, terminal=0, td=i)
     
-            self.assertEqual(manager.count, replayMemorySize)
-            self.assertEqual(manager.getHeapLength(), replayMemorySize)
+            self.assertEqual(manager.count, replay_memory_size)
+            self.assertEqual(manager.get_heap_length(), replay_memory_size)
 
-    def test_GetMinibatch(self):    
-        replayMemorySize = 100000
-        dataLen = 220000
-        minibatchSize = 32
-        manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
-        for i in range(dataLen):
+    def test_get_minibatch(self):    
+        replay_memory_size = 100000
+        data_len = 220000
+        minibatch_size = 32
+        uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+        manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+        for i in range(data_len):
             state = np.zeros((84, 84), dtype=np.int)
             state.fill(i)
             manager.add(action=0, reward=0, screen=state, terminal=0, td=i)
     
-        pres, actions, rewards, posts, terminals, replayIndexes, heapIndexes, weights = manager.getMinibatch()
-        self.assertEqual(minibatchSize, len(actions))
+        pres, actions, rewards, posts, terminals, replay_indexes, heap_indexes, weights = manager.get_minibatch()
+        self.assertEqual(minibatch_size, len(actions))
         
         # Weights should be ascending order
         if self.mode == 'RANK':
@@ -93,85 +97,89 @@ class TestSamplingManager(unittest.TestCase):
                 prevWeight = weight
             self.assertEquals(error, False)
         
-        #print 'heapIndexList : %s' % manager.heapIndexList
-        #print 'heapIndexes : %s' % heapIndexes
-        print 'replayIndexes : %s' % replayIndexes
+        #print 'heap_index_list : %s' % manager.heap_index_list
+        #print 'heap_indexes : %s' % heap_indexes
+        print 'replay_indexes : %s' % replay_indexes
         
         manager.sort()
 
-        pres, actions, rewards, posts, terminals, replayIndexes, heapIndexes, weights = manager.getMinibatch()
+        pres, actions, rewards, posts, terminals, replay_indexes, heap_indexes, weights = manager.get_minibatch()
         
-        print 'replayIndexes : %s' % replayIndexes
+        print 'replay_indexes : %s' % replay_indexes
     
-    def atest_GetMinibatch2(self):    
-        replayMemorySize = 100000
-        minibatchSize = 32
-        dataLenList = [1000, 100000, 220000]
-        for dataLen in dataLenList:
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
-            for i in range(dataLen):
+    def atest_get_minibatch2(self):    
+        replay_memory_size = 100000
+        minibatch_size = 32
+        data_len_list = [1000, 100000, 220000]
+        for data_len in data_len_list:
+            uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+            manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
                 manager.add(action=0, reward=0, screen=state, terminal=0, td=100)
     
-            memorySizeToCheck = min(replayMemorySize, dataLen)
-            startIndex = dataLen % replayMemorySize
+            memory_size_to_check = min(replay_memory_size, data_len)
+            start_index = data_len % replay_memory_size
             visited = {}
-            for i in range(memorySizeToCheck):
+            for i in range(memory_size_to_check):
                 visited[i] = 0
                 
-            for i in range(replayMemorySize):
-                pres, actions, rewards, posts, terminals, replayIndexes, heapIndexes, weights = manager.getMinibatch()
-                for replayIndex in replayIndexes:
-                    visited[replayIndex] += 1
+            for i in range(replay_memory_size):
+                pres, actions, rewards, posts, terminals, replay_indexes, heap_indexes, weights = manager.get_minibatch()
+                for replay_index in replay_indexes:
+                    visited[replay_index] += 1
                 
             everyIndexVisited = True
-            for i in range(4, memorySizeToCheck):
-                if visited[i] == 0 and (i < startIndex or i > startIndex + 3):
+            for i in range(4, memory_size_to_check):
+                if visited[i] == 0 and (i < start_index or i > start_index + 3):
                     print 'index %s is not visited' % i
                     everyIndexVisited = False
-                    #manager.getMinibatch()
+                    #manager.get_minibatch()
                     #break
             
             #self.assertEqual(everyIndexVisited, True)
                     
         
-    def atest_GetMinibatch3(self):    
-        replayMemorySize = 100000
-        minibatchSize = 32
-        dataLenList = [1000, 100000, 200000]
-        for dataLen in dataLenList:
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
-            for i in range(dataLen):
+    def test_get_minibatch3(self):    
+        replay_memory_size = 100000
+        minibatch_size = 32
+        data_len_list = [1000, 100000, 200000]
+        for data_len in data_len_list:
+            uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+            manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
                 manager.add(action=0, reward=0, screen=state, terminal=0, td=i)
     
             manager.sort()
             
-            memorySizeToCheck = min(replayMemorySize, dataLen)
-            startIndex = dataLen % replayMemorySize
+            memory_size_to_check = min(replay_memory_size, data_len)
+            start_index = data_len % replay_memory_size
             visited = {}
-            for i in range(memorySizeToCheck):
+            for i in range(memory_size_to_check):
                 visited[i] = 0
                 
-            for i in range(replayMemorySize):
-                pres, actions, rewards, posts, terminals, replayIndexes, heapIndexes, weights = manager.getMinibatch()
-                for replayIndex in replayIndexes:
-                    visited[replayIndex] += 1
+            for i in range(replay_memory_size):
+                pres, actions, rewards, posts, terminals, replay_indexes, heap_indexes, weights = manager.get_minibatch()
+                for replay_index in replay_indexes:
+                    visited[replay_index] += 1
             
-            if dataLen >= 100000:
-                for i in range(4, memorySizeToCheck / 10):
-                    self.assertGreater(visited[memorySizeToCheck-i-1], visited[i])
+            if data_len >= 100000:
+                for i in range(4, memory_size_to_check / 10):
+                    self.assertGreater(visited[memory_size_to_check-i-1], visited[i])
                     
     
-    def atest_Sort(self):
-        replayMemorySize = 10**6
-        dataLenList = [100, 1000, 2000, 10**6]
-        for dataLen in dataLenList:
-            minibatchSize = 32
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
-            for i in range(dataLen):
+    def test_sort(self):
+        replay_memory_size = 10**6
+        #data_len_list = [100, 1000, 2000, 10**6]
+        data_len_list = [100, 1000, 2000]
+        for data_len in data_len_list:
+            minibatch_size = 32
+            uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+            manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
                 manager.add(action=0, reward=0, screen=state, terminal=0, td=i)
@@ -179,122 +187,125 @@ class TestSamplingManager(unittest.TestCase):
             #for i in range(len(manager.heap)):
             #    print 'heap[%s] : %s, %s' % (i, manager.heap[i][0], manager.heap[i][1])
 
-            self.checkHeapIndexListValidity(manager)
+            self.check_heap_index_list_validity(manager)
             
             startTime = time.time()
             manager.sort()
             
-            print 'sort() %s data took %.1f sec' % (dataLen, time.time() - startTime)
+            print 'sort() %s data took %.1f sec' % (data_len, time.time() - startTime)
 
-            self.checkHeapIndexListValidity(manager)
+            self.check_heap_index_list_validity(manager)
                 
-            prevTD = sys.maxint
+            prev_td = sys.maxint
             for i in range(1, len(manager.heap)):
                 td = manager.heap[i][1]
-                self.assertGreaterEqual(prevTD, td)
-                prevTD = td
+                self.assertGreaterEqual(prev_td, td)
+                prev_td = td
             
             #for i in range(len(manager.heap)):
             #    print 'heap[%s] : %s, %s' % (i, manager.heap[i][0], manager.heap[i][1])
         
-    def test_UpdateTD(self):
-        replayMemorySize = 1000
-        dataLenList = [100, 1000, 2000, 2200]
-        for dataLen in dataLenList:
-            minibatchSize = 32
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
-            for i in range(dataLen):
+    def test_update_td(self):
+        replay_memory_size = 1000
+        data_len_list = [100, 1000, 2000, 2200]
+        for data_len in data_len_list:
+            minibatch_size = 32
+            uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+            manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
                 manager.add(action=0, reward=0, screen=state, terminal=0, td=i)
     
-            self.checkHeapIndexListValidity(manager)
+            self.check_heap_index_list_validity(manager)
 
             # Change td of the top item to the lowest then check the item is in the last
-            heapIndex = 1
-            item = manager.heap[heapIndex]
-            replayIndex = item[0]
-            newTD = -sys.maxint
-            manager.updateTD(heapIndex, newTD)
+            heap_index = 1
+            item = manager.heap[heap_index]
+            replay_index = item[0]
+            new_td = -sys.maxint
+            manager.update_td(heap_index, new_td)
 
             item2 = manager.heap[len(manager.heap) - 1]
-            replayIndex2 = item2[0]
+            replay_index2 = item2[0]
             
-            self.assertEqual(replayIndex, replayIndex2)
+            self.assertEqual(replay_index, replay_index2)
             
             # Increase td of an item then check the item is in the higher index
             for i in range(100):        # Test 100 times
-                heapIndex = random.randint(1, len(manager.heap) - 1)
-                item = manager.heap[heapIndex]
-                replayIndex = item[0]
+                heap_index = random.randint(1, len(manager.heap) - 1)
+                item = manager.heap[heap_index]
+                replay_index = item[0]
                 td = item[1]
-                newTD = td + 10
-                manager.updateTD(heapIndex, newTD)
+                new_td = td + 10
+                manager.update_td(heap_index, new_td)
     
-                newHeapIndex = manager.heapIndexList[replayIndex]
-                item2 = manager.heap[newHeapIndex]
+                new_heap_index = manager.heap_index_list[replay_index]
+                item2 = manager.heap[new_heap_index]
                 
                 self.assertEquals(item[0], item2[0])
-                self.assertGreaterEqual(heapIndex, newHeapIndex)
+                self.assertGreaterEqual(heap_index, new_heap_index)
 
-            self.checkHeapIndexListValidity(manager)
+            self.check_heap_index_list_validity(manager)
 
-    def test_CalculateSegments(self):
-        replayMemorySize = 10**6
-        #dataLenList = [50000, 100000, 1000000, 2000000]
-        #dataLenList = [1000000]
-        dataLenList = [10000]
-        startTD = 0.000001
-        endTD = 1.0
-        for dataLen in dataLenList:
+    def test_calculate_segments(self):
+        replay_memory_size = 10**6
+        #data_len_list = [50000, 100000, 1000000, 2000000]
+        #data_len_list = [1000000]
+        data_len_list = [10000]
+        start_td = 0.000001
+        end_td = 1.0
+        for data_len in data_len_list:
             
-            print 'testing %s' % dataLen
+            print 'testing %s' % data_len
             
-            tdIncrease = (endTD - startTD) / dataLen
-            minibatchSize = 32
-            manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
+            td_increase = (end_td - start_td) / data_len
+            minibatch_size = 32
+            uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+            manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
             
             time1 = time.time()
-            for i in range(dataLen):
+            for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
-                #manager.add(action=0, reward=0, screen=state, terminal=0, td=startTD + i * tdIncrease)
+                #manager.add(action=0, reward=0, screen=state, terminal=0, td=start_td + i * td_increase)
                 manager.add(action=0, reward=0, screen=state, terminal=0, td=i)
     
             time2 = time.time()
-            manager.calculateSegments()
+            manager.calculate_segments()
             time3 = time.time()
             
-            print 'Adding %d took %.1f sec.' % (dataLen, time2 - time1)
+            print 'Adding %d took %.1f sec.' % (data_len, time2 - time1)
             print 'Calculating segments took %.1f sec.' % (time3 - time2)
 
-    def test_GetSegments(self):
-        #dataLen = 10**6
-        dataLen = 10**4
-        replayMemorySize = dataLen
-        minibatchSize = 32
-        startTD = 0.000001
-        endTD = 1.0
-        tdIncrease = (endTD - startTD) / dataLen
-        manager = SamplingManager(replayMemorySize, minibatchSize, 4, 84, 84, self.mode, self.alpha, self.beta, self.sortTerm)
-        for i in range(dataLen):
+    def test_get_segments(self):
+        #data_len = 10**6
+        data_len = 10**4
+        replay_memory_size = data_len
+        minibatch_size = 32
+        start_td = 0.000001
+        end_td = 1.0
+        td_increase = (end_td - start_td) / data_len
+        uniform_replay_memory = ReplayMemory(None, False, replay_memory_size, 32, 4, 84, 84, True)            
+        manager = SamplingManager(uniform_replay_memory, False, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+        for i in range(data_len):
             state = np.zeros((84, 84), dtype=np.int)
             state.fill(i)
-            #manager.add(action=0, reward=0, screen=state, terminal=0, td=startTD + i * tdIncrease)
+            #manager.add(action=0, reward=0, screen=state, terminal=0, td=start_td + i * td_increase)
             manager.add(action=0, reward=0, screen=state, terminal=0, td=i)
-            segmentIndex = manager.getSegments()
+            segment_index = manager.get_segments()
             
-            if i % 100000 == 0 or i == dataLen - 1:
-                print 'segmentIndex : %s' % segmentIndex
+            if i % 100000 == 0 or i == data_len - 1:
+                print 'segment_index : %s' % segment_index
 
         for i in range(len(manager.heap)):
             print 'manager.heap[%s] : %s, %s' % (i, manager.heap[i][0], manager.heap[i][1])
             
         manager.sort()
-        segmentIndex = manager.getSegments()
-        print 'segmentIndex : %s' % segmentIndex
+        segment_index = manager.get_segments()
+        print 'segment_index : %s' % segment_index
         
 if __name__ == '__main__':
     unittest.main()
-    #TestSamplingManager().test_GetSegments()
-    #TestSamplingManager().test_CalculateSegments()
+    #TestSamplingManager().test_get_segments()
+    #TestSamplingManager().test_calculate_segments()

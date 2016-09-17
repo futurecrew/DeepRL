@@ -6,27 +6,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ReplayMemory:
-  def __init__(self, be, useGpuReplayMem, size, batchSize, historyNo, width, height, minibatchRandom):
+  def __init__(self, be, use_gpu_replay_mem, size, batch_size, history_no, width, height, minibatch_random):
     self.be = be
-    self.useGpuReplayMem = useGpuReplayMem
+    self.use_gpu_replay_mem = use_gpu_replay_mem
     self.size = size
-    self.minibatchRandom = minibatchRandom
+    self.minibatch_random = minibatch_random
     # preallocate memory
     self.actions = np.empty(self.size, dtype = np.uint8)
     self.rewards = np.empty(self.size, dtype = np.integer)
-    if self.useGpuReplayMem:
+    if self.use_gpu_replay_mem:
         self.screens = self.be.empty((self.size, height, width), dtype = np.uint8)
     else:
         self.screens = np.empty((self.size, height, width), dtype = np.uint8)
     self.terminals = np.empty(self.size, dtype = np.bool)
-    self.history_length = historyNo
+    self.history_length = history_no
     self.dims = (height, width)
-    self.batch_size = batchSize
+    self.batch_size = batch_size
     self.count = 0
     self.current = 0
 
     # pre-allocate prestates and poststates for minibatch
-    if self.useGpuReplayMem:
+    if self.use_gpu_replay_mem:
         self.prestates = self.be.empty((self.batch_size, self.history_length,) + self.dims, dtype=np.uint8)
         self.poststates = self.be.empty((self.batch_size, self.history_length,) + self.dims, dtype=np.uint8)
         self.prestates_view = [self.prestates[i, ...] for i in xrange(self.batch_size)]
@@ -51,7 +51,7 @@ class ReplayMemory:
     
     return addedIndex
   
-  def getState(self, index):
+  def get_state(self, index):
     assert self.count > 0, "replay memory is empty, use at least --random_steps 1"
     # normalize index to expected range, allows negative indexes
     index = index % self.count
@@ -64,13 +64,13 @@ class ReplayMemory:
       indexes = [(index - i) % self.count for i in reversed(range(self.history_length))]
       return self.screens[indexes, ...]
 
-  def getMinibatch(self):
-    if self.minibatchRandom:
-        return self.getMinibatchRandom()
+  def get_minibatch(self):
+    if self.minibatch_random:
+        return self.get_minibatch_random()
     else:
-        return self.getMinibatchSequential()
+        return self.get_minibatch_sequential()
     
-  def getMinibatchRandom(self):
+  def get_minibatch_random(self):
     # memory must include poststate, prestate and history
     assert self.count > self.history_length
     # sample random indexes
@@ -91,12 +91,12 @@ class ReplayMemory:
         break
       
       # NB! having index first is fastest in C-order matrices
-      if self.useGpuReplayMem:      
-          self.prestates_view[len(indexes)][:] = self.getState(index - 1)
-          self.poststates_view[len(indexes)][:] = self.getState(index)
+      if self.use_gpu_replay_mem:      
+          self.prestates_view[len(indexes)][:] = self.get_state(index - 1)
+          self.poststates_view[len(indexes)][:] = self.get_state(index)
       else:            
-          self.prestates[len(indexes), ...] = self.getState(index - 1)
-          self.poststates[len(indexes), ...] = self.getState(index)
+          self.prestates[len(indexes), ...] = self.get_state(index - 1)
+          self.poststates[len(indexes), ...] = self.get_state(index)
       indexes.append(index)
 
     # copy actions, rewards and terminals with direct slicing
@@ -105,7 +105,7 @@ class ReplayMemory:
     terminals = self.terminals[indexes]
     return self.prestates, actions, rewards, self.poststates, terminals
 
-  def getMinibatchSequential(self):
+  def get_minibatch_sequential(self):
     # memory must include poststate, prestate and history
     assert self.count >= self.batch_size + self.history_length
     # sample random indexes
@@ -123,12 +123,12 @@ class ReplayMemory:
           continue
         
         # NB! having index first is fastest in C-order matrices
-        if self.useGpuReplayMem:      
-            self.prestates_view[len(indexes)][:] = self.getState(index - 1)
-            self.poststates_view[len(indexes)][:] = self.getState(index)
+        if self.use_gpu_replay_mem:      
+            self.prestates_view[len(indexes)][:] = self.get_state(index - 1)
+            self.poststates_view[len(indexes)][:] = self.get_state(index)
         else:            
-            self.prestates[len(indexes), ...] = self.getState(index - 1)
-            self.poststates[len(indexes), ...] = self.getState(index)
+            self.prestates[len(indexes), ...] = self.get_state(index - 1)
+            self.poststates[len(indexes), ...] = self.get_state(index)
         indexes.append(index)
 
         if len(indexes) == self.batch_size:
