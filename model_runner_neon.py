@@ -172,8 +172,11 @@ class ModelRunnerNeon():
                 delta.set(delta_value.copy())
             #delta_value2 = delta.asnumpyarray()
             #pass
-            
-        self.be.clip(delta, -1.0, 1.0, out = delta)        
+          
+        # DJDJ
+        if self.settings['clip_delta'] == True:  
+            self.be.clip(delta, -1.0, 1.0, out = delta)
+                
         self.train_net.bprop(delta)
         self.optimizer.optimize(self.train_net.layers_to_optimize, epoch=0)
 

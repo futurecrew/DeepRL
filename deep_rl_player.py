@@ -422,9 +422,9 @@ if __name__ == '__main__':
     #settings['game'] = 'enduro'
     #settings['game'] = 'kung_fu_master'
     #settings['game'] = 'krull'
-    #settings['game'] = 'hero'
+    settings['game'] = 'hero'
     #settings['game'] = 'qbert'
-    settings['game'] = 'seaquest'
+    #settings['game'] = 'seaquest'
 
     settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']    
     settings['frame_repeat'] = 4    
@@ -458,6 +458,8 @@ if __name__ == '__main__':
     #settings['backend'] = 'NEON'
     settings['backend'] = 'TF'
     
+    settings['tf_version'] = 'v1'
+    settings['clip_delta'] = True
     settings['use_self.current_state'] = True
     settings['use_successive_two_frames'] = True
     settings['dnn_initializer'] = 'fan_in'
@@ -475,6 +477,7 @@ if __name__ == '__main__':
     settings['test_epsilon'] = 0.001
     settings['update_step'] = 30000
 
+
     # Prioritized experience replay params for RANK
     settings['prioritized_replay'] = True
     settings['learning_rate'] = 0.00025 / 4
@@ -482,7 +485,7 @@ if __name__ == '__main__':
     settings['sampling_alpha'] = 0.7
     settings['sampling_beta'] = 0.5
     settings['heap_sort_term'] = 250000
-    
+
 
     """
     # Prioritized experience replay params for PROPORTION

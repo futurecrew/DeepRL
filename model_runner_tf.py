@@ -131,21 +131,161 @@ class ModelRunnerTF():
         self.y_a = tf.reduce_sum(tf.mul(self.y, self.a), reduction_indices=1)
         print('y_a %s' % (self.y_a.get_shape()))
 
-        difference = tf.abs(self.y_a - self.y_)
-        quadratic_part = tf.clip_by_value(difference, 0.0, 1.0)
-        linear_part = difference - quadratic_part
-        self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
-        if self.settings['prioritized_replay'] == True:
-            self.weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="weight")
-            self.loss = tf.reduce_sum(tf.mul(self.errors, self.weight))
-        else:
-            self.loss = tf.reduce_sum(self.errors)
+        if settings['tf_version'] == 'v1':
+            # v1
+            self.difference = tf.abs(self.y_a - self.y_)
+            quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
+            linear_part = self.difference - quadratic_part
+            #self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
+            self.errors = 0.5 * tf.square(self.difference)
+            if self.settings['prioritized_replay'] == True:
+                self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+                self.errors2 = tf.mul(self.errors, self.priority_weight)
+            else:
+                self.errors2 = self.errors
+            if self.settings['clip_delta'] == True:  
+                self.loss = tf.reduce_sum(tf.clip_by_value(self.errors2, 0.0, 1.0))
+            else:
+                self.loss = tf.reduce_sum(self.errors2)
+    
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+            self.train_step = optimizer.minimize(self.loss)
 
-        optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
-        self.train_step = optimizer.minimize(self.loss)
-        #self.train_gradients = optimizer.compute_gradients(self.loss2, self.var_train)
-        #self.train_gradients = optimizer.compute_gradients(self.loss, self.var_train)
-        #self.apply_gradients = optimizer.apply_gradients(self.train_gradients)
+        elif settings['tf_version'] == 'v2':
+            # v2
+            self.difference = tf.abs(self.y_a - self.y_)
+            if self.settings['clip_delta'] == True:  
+                quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
+            else:
+                quadratic_part = self.difference
+            self.errors = 0.5 * tf.square(quadratic_part)
+            if self.settings['prioritized_replay'] == True:
+                self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+                self.loss = tf.reduce_sum(tf.mul(self.errors, self.priority_weight))
+            else:
+                self.loss = tf.reduce_sum(self.errors)
+    
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+            self.train_step = optimizer.minimize(self.loss)
+
+        elif settings['tf_version'] == 'v3':
+            # v3
+            self.difference = self.y_a - self.y_
+            if self.settings['clip_delta'] == True:  
+                quadratic_part = tf.clip_by_value(self.difference, -1.0, 1.0)
+            else:
+                quadratic_part = self.difference
+            self.errors = 0.5 * tf.square(quadratic_part)
+            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+    
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+            self.new_td = tf.mul(quadratic_part, self.priority_weight)
+            self.train_step = optimizer.minimize(self.errors, grad_loss=self.new_td)
+
+        elif settings['tf_version'] == 'v4':
+            # v4
+            self.difference = tf.abs(self.y_a - self.y_)
+            if self.settings['clip_delta'] == True:  
+                quadratic_part = tf.clip_by_value(self.difference, 0, 1.0)
+            else:
+                quadratic_part = self.difference
+            self.errors = 0.5 * tf.square(quadratic_part)
+            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+    
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+            self.new_td = tf.mul(quadratic_part, self.priority_weight)
+            self.train_step = optimizer.minimize(self.errors, grad_loss=self.new_td)
+
+        elif settings['tf_version'] == 'v5':
+            # v5
+            self.difference = self.y_a - self.y_
+            if self.settings['clip_delta'] == True:  
+                quadratic_part = tf.clip_by_value(self.difference, -1.0, 1.0)
+            else:
+                quadratic_part = self.difference
+            self.errors = 0.5 * tf.square(quadratic_part)
+            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+    
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+            self.weighted_diff = tf.mul(self.difference, self.priority_weight)
+            if self.settings['clip_delta'] == True:  
+                self.new_td = tf.clip_by_value(self.weighted_diff, -1.0, 1.0)
+            else:
+                self.new_td = self.weighted_diff
+            
+            self.train_step = optimizer.minimize(self.errors, grad_loss=self.new_td)
+
+        elif settings['tf_version'] == 'v6':
+            # v6
+            self.difference = tf.abs(self.y_a - self.y_)
+            quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
+            linear_part = self.difference - quadratic_part
+            #self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
+            self.errors = 0.5 * tf.square(self.difference)
+            if self.settings['prioritized_replay'] == True:
+                self.weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="weight")
+                self.errors2 = tf.mul(self.errors, self.weight)
+            else:
+                self.errors2 = self.errors
+            if self.settings['clip_delta'] == True:  
+                self.loss = tf.reduce_sum(tf.clip_by_value(self.errors2, 0.0, 1.0))
+            else:
+                self.loss = tf.reduce_sum(self.errors2)
+    
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+            self.train_step = optimizer.minimize(self.errors2)
+            
+        elif settings['tf_version'] == 'v7':
+            # v7
+            self.difference = self.y_a - self.y_
+            if self.settings['clip_delta'] == True:  
+                quadratic_part = tf.clip_by_value(self.difference, -1.0, 1.0)
+            else:
+                quadratic_part = self.difference
+            self.errors = 0.5 * tf.square(quadratic_part)
+            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+            self.train_step = optimizer.minimize(self.errors)
+
+        elif settings['tf_version'] == 'v8':
+            # v8
+            self.difference = self.y_a - self.y_
+            if self.settings['clip_delta'] == True:  
+                quadratic_part = tf.clip_by_value(self.difference, -1.0, 1.0)
+            else:
+                quadratic_part = self.difference
+            self.errors = 0.5 * tf.square(quadratic_part)
+            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+    
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)            
+            self.train_step = optimizer.minimize(self.errors, grad_loss=self.priority_weight)
+            
+        elif settings['tf_version'] == 'v9':
+            # v9
+            pass
+        elif settings['tf_version'] == 'v10':
+            # v10
+            self.difference = tf.abs(self.y_a - self.y_)
+            if self.settings['clip_delta'] == True:  
+                quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
+            else:
+                quadratic_part = self.difference
+            self.errors = 0.5 * tf.square(quadratic_part)
+            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+            self.loss = tf.reduce_sum(self.errors)
+    
+            optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
+            self.train_gradients = optimizer.compute_gradients(self.errors, self.var_train, grad_loss=self.priority_weight)
+            for i, (grad, var) in enumerate(self.train_gradients): 
+                if self.settings['prioritized_replay'] == True:
+                    #new_grad = tf.mul(self.weight, grad)
+                    new_grad = grad
+                else:
+                    new_grad = grad
+                self.train_gradients[i] = (tf.clip_by_value(new_grad, 0.0, 1.0), var)                    
+            self.train_step = optimizer.apply_gradients(self.train_gradients)
+
 
         self.saver = tf.train.Saver(max_to_keep=25)
 
@@ -183,17 +323,14 @@ class ModelRunnerTF():
         if 'multi_thread_sync_step' in self.settings and self.step_no % self.settings['multi_thread_sync_step'] == 0:
             self.global_sess.run(self.sync) 
         
-        self.action_mat.fill(0)
-        for i in range(self.train_batch_size):
-            self.action_mat[i, actions[i]] = 1
-
         y2 = self.y_target.eval(feed_dict={self.x_target: poststates.transpose(0, 2, 3, 1)}, session=self.sess)
         if self.settings['double_dqn'] == True:
             y3 = self.y.eval(feed_dict={self.x: poststates.transpose(0, 2, 3, 1)}, session=self.sess)
 
+        self.action_mat.fill(0)
         y_ = np.zeros(self.train_batch_size)
         
-        for i in range(0, self.train_batch_size):
+        for i in range(self.train_batch_size):
             self.action_mat[i, actions[i]] = 1
             clipped_reward = self.clip_reward(rewards[i])
             if terminals[i]:
@@ -204,25 +341,19 @@ class ModelRunnerTF():
                     y_[i] = clipped_reward + self.discount_factor * y2[i][max_index]
                 else:
                     y_[i] = clipped_reward + self.discount_factor * np.max(y2[i])
-        
-        
-        if self.settings['prioritized_replay'] == True:
-            delta_value = self.sess.run(self.errors, feed_dict={
-                self.x: prestates.transpose(0, 2, 3, 1),
-                self.a: self.action_mat,
-                self.y_: y_
-            })
-            for i in range(self.train_batch_size):
-                if debug:
-                    print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], delta_value[i], weights[i] * delta_value[actions[i], i]) 
-                replay_memory.update_td(heap_indexes[i], abs(delta_value[i]))
 
-            self.train_step.run(feed_dict={
+        if self.settings['prioritized_replay'] == True:
+            delta_value, _, y_a = self.sess.run([self.difference, self.train_step, self.y_a], feed_dict={
                 self.x: prestates.transpose(0, 2, 3, 1),
                 self.a: self.action_mat,
                 self.y_: y_,
-                self.weight: weights
-            }, session=self.sess)
+                self.priority_weight: weights
+            })
+            for i in range(self.train_batch_size):
+                replay_memory.update_td(heap_indexes[i], abs(delta_value[i]))
+                if debug:
+                    print 'y_- y_a[%s]: %.5f, y_: %.5f, y_a: %.5f' % (i, (y_[i] - y_a[i]), y_[i], y_a[i]) 
+                    print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], delta_value[i], weights[i] * delta_value[i]) 
         else:
             self.train_step.run(feed_dict={
                 self.x: prestates.transpose(0, 2, 3, 1),
