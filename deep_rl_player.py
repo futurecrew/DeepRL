@@ -154,10 +154,11 @@ class DeepRLPlayer:
             return action_index, greedy_epsilon
         
     def print_env(self):
-        print 'Start time: %s' % time.strftime('%Y.%m.%d %H:%M:%S')
-        print '[ Running Environment ]'
-        for key in self.settings.keys():
-            print '{} : '.format(key).ljust(30) + '{}'.format(self.settings[key])
+        if self.settings['asynchronousRL'] == False or self.thread_no == 0:
+            print 'Start time: %s' % time.strftime('%Y.%m.%d %H:%M:%S')
+            print '[ Running Environment ]'
+            for key in self.settings.keys():
+                print '{} : '.format(key).ljust(30) + '{}'.format(self.settings[key])
         
     def reset_game(self):
         self.model_runner.clear_history_buffer()
@@ -328,7 +329,7 @@ class DeepRLPlayer:
                    greedy_epsilon, self.train_step)
              
             # Test once every epoch
-            if self.thread_no == None or self.thread_no == 0:
+            if settings['asynchronousRL'] == False or self.thread_no == 0:
                 self.test(epoch)
                     
             self.epoch_done = epoch
@@ -417,12 +418,12 @@ def play(settings, play_file=None):
 if __name__ == '__main__':    
     settings = {}
 
-    #settings['game'] = 'breakout'
+    settings['game'] = 'breakout'
     #settings['game'] = 'space_invaders'
     #settings['game'] = 'enduro'
     #settings['game'] = 'kung_fu_master'
     #settings['game'] = 'krull'
-    settings['game'] = 'hero'
+    #settings['game'] = 'hero'
     #settings['game'] = 'qbert'
     #settings['game'] = 'seaquest'
 
@@ -453,7 +454,8 @@ if __name__ == '__main__':
     settings['prioritized_replay'] = False
     settings['use_priority_weight'] = True
     settings['minibatch_random'] = True        # Whether to use random indexing for minibatch or not 
-    settings['multi_thread_no'] = 0                # Number of multiple threads for Asynchronous RL
+    settings['multi_thread_no'] = 0                 # Number of multiple threads for Asynchronous RL
+    settings['asynchronousRL'] = False
 
     #settings['backend'] = 'NEON'
     settings['backend'] = 'TF'
@@ -477,7 +479,7 @@ if __name__ == '__main__':
     settings['test_epsilon'] = 0.001
     settings['update_step'] = 30000
 
-
+    """
     # Prioritized experience replay params for RANK
     settings['prioritized_replay'] = True
     settings['learning_rate'] = 0.00025 / 4
@@ -485,7 +487,7 @@ if __name__ == '__main__':
     settings['sampling_alpha'] = 0.7
     settings['sampling_beta'] = 0.5
     settings['heap_sort_term'] = 250000
-
+    """
 
     """
     # Prioritized experience replay params for PROPORTION
@@ -498,14 +500,14 @@ if __name__ == '__main__':
     settings['heap_sort_term'] = 250000
     """
     
-    """
     # Asynchronous RL
+    settings['asynchronousRL'] = True
     settings['train_start'] = settings['train_batch_size'] + settings['screen_history'] - 1 
     settings['max_replay_memory'] = settings['train_start'] + 100
     settings['minibatch_random'] = False
-    settings['multi_thread_no'] = 2
+    settings['multi_thread_no'] = 8
     settings['multi_thread_sync_step'] = 10
-    """
+
     
     data_file = None    
     #data_file = 'snapshot/breakout/dqn_neon_3100000.prm'
