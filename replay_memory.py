@@ -6,20 +6,27 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ReplayMemory:
-  def __init__(self, be, use_gpu_replay_mem, size, batch_size, history_no, width, height, minibatch_random):
+  def __init__(self, be, use_gpu_replay_mem, size, batch_size, history_length, width, height, minibatch_random, screen_order='shw'):
     self.be = be
     self.use_gpu_replay_mem = use_gpu_replay_mem
     self.size = size
     self.minibatch_random = minibatch_random
+    self.screen_order = screen_order
     # preallocate memory
     self.actions = np.empty(self.size, dtype = np.uint8)
     self.rewards = np.empty(self.size, dtype = np.integer)
+    if self.screen_order == 'hws':        # (height, width, size)
+        screen_dim = (height, width, self.size)
+        state_dim = (batch_size, height, width, history_length)
+    else:       # (size, height, width)
+        screen_dim = (self.size, height, width)
+        state_dim = (batch_size, history_length, height, width)
     if self.use_gpu_replay_mem:
-        self.screens = self.be.empty((self.size, height, width), dtype = np.uint8)
+        self.screens = self.be.empty(screen_dim, dtype = np.uint8)
     else:
-        self.screens = np.empty((self.size, height, width), dtype = np.uint8)
+        self.screens = np.empty(screen_dim, dtype = np.uint8)
     self.terminals = np.empty(self.size, dtype = np.bool)
-    self.history_length = history_no
+    self.history_length = history_length
     self.dims = (height, width)
     self.batch_size = batch_size
     self.count = 0
@@ -27,13 +34,13 @@ class ReplayMemory:
 
     # pre-allocate prestates and poststates for minibatch
     if self.use_gpu_replay_mem:
-        self.prestates = self.be.empty((self.batch_size, self.history_length,) + self.dims, dtype=np.uint8)
-        self.poststates = self.be.empty((self.batch_size, self.history_length,) + self.dims, dtype=np.uint8)
+        self.prestates = self.be.empty(state_dim, dtype=np.uint8)
+        self.poststates = self.be.empty(state_dim, dtype=np.uint8)
         self.prestates_view = [self.prestates[i, ...] for i in xrange(self.batch_size)]
         self.poststates_view = [self.poststates[i, ...] for i in xrange(self.batch_size)]
     else:
-        self.prestates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.uint8)
-        self.poststates = np.empty((self.batch_size, self.history_length) + self.dims, dtype = np.uint8)
+        self.prestates = np.empty(state_dim, dtype = np.uint8)
+        self.poststates = np.empty(state_dim, dtype = np.uint8)
 
     logger.info("Replay memory size: %d" % self.size)
 
@@ -43,7 +50,10 @@ class ReplayMemory:
     # NB! screen is post-state, after action and reward
     self.actions[self.current] = action
     self.rewards[self.current] = reward
-    self.screens[self.current, ...] = screen
+    if self.screen_order == 'hws':        # (height, width, size)
+        self.screens[..., self.current] = screen
+    else:           # (size, height, width)
+        self.screens[self.current, ...] = screen
     self.terminals[self.current] = terminal
     self.count = max(self.count, self.current + 1)
     self.current = (self.current + 1) % self.size
@@ -57,12 +67,18 @@ class ReplayMemory:
     index = index % self.count
     # if is not in the beginning of matrix
     if index >= self.history_length - 1:
-      # use faster slicing
-      return self.screens[(index - (self.history_length - 1)):(index + 1), ...]
+        # use faster slicing
+        if self.screen_order == 'hws':        # (height, width, size)
+          return self.screens[..., (index - (self.history_length - 1)):(index + 1)]
+        else:           # (size, height, width)
+          return self.screens[(index - (self.history_length - 1)):(index + 1), ...]
     else:
       # otherwise normalize indexes and use slower list based access
       indexes = [(index - i) % self.count for i in reversed(range(self.history_length))]
-      return self.screens[indexes, ...]
+      if self.screen_order == 'hws':        # (height, width, size)
+        return self.screens[..., indexes]
+      else:           # (size, height, width)
+        return self.screens[indexes, ...]
 
   def get_minibatch(self):
     if self.minibatch_random:

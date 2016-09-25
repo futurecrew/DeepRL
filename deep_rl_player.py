@@ -27,7 +27,13 @@ class DeepRLPlayer:
         for _ in range(4):
             self.zero_history.append(np.zeros((84, 84), dtype=np.uint8))
 
-        self.batch_dimension = (self.settings['train_batch_size'], 
+        if self.settings['screen_order'] == 'hws':
+            self.batch_dimension = (self.settings['train_batch_size'], 
+                                      self.settings['screen_height'], 
+                                      self.settings['screen_width'],
+                                      self.settings['screen_history'])
+        else:
+            self.batch_dimension = (self.settings['train_batch_size'], 
                                       self.settings['screen_history'],
                                       self.settings['screen_height'], 
                                       self.settings['screen_width'])
@@ -66,22 +72,18 @@ class DeepRLPlayer:
         self.initialize_model()
         self.initialize_replay_memory()
         
-        DebugInput(self).start()
+        #DebugInput(self).start()
         self.debug = False
         
     def initialize_ale(self, display_screen=False):
         self.ale = ALEInterface()
-        
-        #max_frames_per_episode = self.ale.getInt("max_num_frames_per_episode");
         self.ale.setInt("random_seed", random.randint(1, 1000))
-        
-        #random_seed = self.ale.getInt("random_seed")
-        #print("random_seed: " + str(random_seed))
-
         if display_screen:
             self.ale.setBool('display_screen', True)
-            
         self.ale.setFloat('repeat_action_probability', 0)
+        
+        # DJDJ
+        #self.ale.setInt(b'frame_skip', 4)
         
         self.ale.loadROM(self.settings['rom'])
         self.legal_actions = self.ale.getMinimalActionSet()
@@ -108,7 +110,8 @@ class DeepRLPlayer:
             self.model_runner = ModelRunnerTF(
                                     self.settings, 
                                     max_action_no = len(self.legal_actions),
-                                    batch_dimension = self.batch_dimension
+                                    batch_dimension = self.batch_dimension,
+                                    thread_no = self.thread_no
                                     )
         else:
             print "settings['backend'] should be NEON or TF."
@@ -121,7 +124,8 @@ class DeepRLPlayer:
                                      self.settings['screen_history'],
                                      self.settings['screen_width'],
                                      self.settings['screen_height'],
-                                     self.settings['minibatch_random'])
+                                     self.settings['minibatch_random'],
+                                     self.settings['screen_order'])
         if self.settings['prioritized_replay'] == True:
             self.replay_memory = SamplingManager(uniform_replay_memory,
                                          self.settings['use_gpu_replay_mem'],
@@ -273,7 +277,6 @@ class DeepRLPlayer:
         
         print 'Start training'
         start_time = time.time()
-        
         for epoch in range(self.epoch_done + 1, self.settings['max_epoch'] + 1):
             epoch_total_reward = 0
             episode_total_reward = 0
@@ -284,7 +287,6 @@ class DeepRLPlayer:
 
             for step_no in range(self.settings['epoch_step']):
                 action_index, greedy_epsilon = self.get_action_from_model('TRAIN')
-                
                 reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
 
                 episode_total_reward += reward
@@ -317,9 +319,6 @@ class DeepRLPlayer:
                     
                     self.reset_game()
                     
-                    #if self.settings['multi_thread_no'] > 1 and episode % self.settings['multi_thread_copy_step']  == 0:
-                    #    self.queueManager.sendParams()
-
                 if step_no > 0 and step_no % self.settings['update_step'] == 0:
                     self.model_runner.update_model()
                 
@@ -374,11 +373,6 @@ class DebugInput(threading.Thread):
         
 global_data = []
 
-def fork_thread(settings, thread_no):
-    print 'fork_thread %s' % thread_no
-    player = DeepRLPlayer(settings, thread_no= thread_no)
-    player.train()
-    
 def train(settings, save_file=None):
     if save_file is not None:        # retrain
         with open(save_file + '.pickle') as f:
@@ -393,11 +387,16 @@ def train(settings, save_file=None):
             player.train(replay_memory_no = player.replay_memory_no)
     else:
         multithread_no = settings['multi_thread_no']
-        if multithread_no > 1:
-            threadList = []                
+        if multithread_no > 0:
+            threadList = []
+            playerList = []                
             for i in range(multithread_no):        
                 print 'creating a thread[%s]' % i
-                t = threading.Thread(target=fork_thread, args=(settings, i))
+                player = DeepRLPlayer(settings, thread_no= i)
+                playerList.append(player)
+
+            for player in playerList:        
+                t = threading.Thread(target=player.train, args=())
                 t.start()
                 threadList.append(t)
                 
@@ -427,7 +426,7 @@ if __name__ == '__main__':
     #settings['game'] = 'qbert'
     #settings['game'] = 'seaquest'
 
-    settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']    
+    settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']
     settings['frame_repeat'] = 4    
     settings['show_screen'] = False
     settings['use_keyboard'] = False
@@ -450,15 +449,18 @@ if __name__ == '__main__':
     settings['rms_decay'] = 0.95
     settings['lost_life_game_over'] = True
     settings['update_step_in_step_no'] = True
+    settings['screen_order'] = 'shw'                # dimension order in replay memory. default=(screen, height, width)
     settings['double_dqn'] = False
     settings['prioritized_replay'] = False
     settings['use_priority_weight'] = True
     settings['minibatch_random'] = True        # Whether to use random indexing for minibatch or not 
+    settings['network_type'] = 'nature'           # nature or nips
     settings['multi_thread_no'] = 0                 # Number of multiple threads for Asynchronous RL
     settings['asynchronousRL'] = False
 
     #settings['backend'] = 'NEON'
     settings['backend'] = 'TF'
+    settings['screen_order'] = 'hws'                # (height, width, screen)
     
     settings['tf_version'] = 'v1'
     settings['clip_delta'] = True
@@ -473,11 +475,13 @@ if __name__ == '__main__':
     settings['use_gpu_replay_mem'] = False
 
     
+    """
     # Double DQN hyper params
     settings['double_dqn'] = True
     settings['train_min_epsilon'] = 0.01
     settings['test_epsilon'] = 0.001
     settings['update_step'] = 30000
+    """
 
     """
     # Prioritized experience replay params for RANK
@@ -504,9 +508,12 @@ if __name__ == '__main__':
     settings['asynchronousRL'] = True
     settings['train_start'] = settings['train_batch_size'] + settings['screen_history'] - 1 
     settings['max_replay_memory'] = settings['train_start'] + 100
+    settings['train_step'] = 1
+    settings['train_batch_size'] = 1
     settings['minibatch_random'] = False
+    settings['network_type'] = 'nips' 
     settings['multi_thread_no'] = 8
-    settings['multi_thread_sync_step'] = 10
+    settings['multi_thread_sync_step'] = 5
 
     
     data_file = None    
