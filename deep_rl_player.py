@@ -103,12 +103,29 @@ class DeepRLPlayer:
                                     batch_dimension = self.batch_dimension
                                     )
         elif self.settings['backend'] == 'TF':
-            from model_runner_tf import ModelRunnerTF
-            self.model_runner = ModelRunnerTF(
+            if self.settings['asynchronousRL'] == True:
+                if settings['asynchronousRL_type'] == 'A3C':            
+                    from model_runner_tf_async_a3c import ModelRunnerTFAsyncA3C
+                    self.model_runner = ModelRunnerTFAsyncA3C(
                                     self.settings, 
                                     max_action_no = len(self.legal_actions),
                                     batch_dimension = self.batch_dimension,
                                     thread_no = self.thread_no
+                                    )
+                else:
+                    from model_runner_tf_async import ModelRunnerTFAsync
+                    self.model_runner = ModelRunnerTFAsync(
+                                    self.settings, 
+                                    max_action_no = len(self.legal_actions),
+                                    batch_dimension = self.batch_dimension,
+                                    thread_no = self.thread_no
+                                    )
+            else:
+                from model_runner_tf import ModelRunnerTF
+                self.model_runner = ModelRunnerTF(
+                                    self.settings, 
+                                    max_action_no = len(self.legal_actions),
+                                    batch_dimension = self.batch_dimension
                                     )
         else:
             print "settings['backend'] should be NEON or TF."
@@ -426,8 +443,8 @@ if __name__ == '__main__':
     #settings['game'] = 'hero'
     #settings['game'] = 'qbert'        # Something wrong with reward?
     #settings['game'] = 'seaquest'
-    #settings['game'] = 'pong'
-    settings['game'] = 'beam_rider'
+    settings['game'] = 'pong'
+    #settings['game'] = 'beam_rider'
 
     settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']
     settings['frame_repeat'] = 4    
@@ -450,7 +467,7 @@ if __name__ == '__main__':
     settings['screen_history'] = 4
     settings['learning_rate'] = 0.00025
     settings['rms_decay'] = 0.95
-    settings['rms_epsilon'] = 1e-10
+    settings['rms_epsilon'] = 0.01
     settings['lost_life_game_over'] = True
     settings['update_step_in_step_no'] = True
     settings['screen_order'] = 'shw'                # dimension order in replay memory. default=(screen, height, width)
@@ -471,9 +488,7 @@ if __name__ == '__main__':
     settings['use_self.current_state'] = True
     settings['use_successive_two_frames'] = True
     settings['dnn_initializer'] = 'fan_in'
-    #settings['dnn_initializer'] = 'xavier'
     settings['optimizer'] = 'RMSProp'
-    #settings['ndimage.zoom'] = True
 
     #settings['use_gpu_replay_mem'] = True           # Whether to store replay memory in gpu or not to speed up leraning
     settings['use_gpu_replay_mem'] = False
@@ -508,9 +523,10 @@ if __name__ == '__main__':
     settings['heap_sort_term'] = 250000
     """
     
-    """
+
     # Asynchronous RL
     settings['asynchronousRL'] = True
+    settings['asynchronousRL_type'] = 'A3C'
     settings['train_start'] = 100
     settings['max_replay_memory'] = 100
     settings['train_step'] = 5
@@ -524,7 +540,7 @@ if __name__ == '__main__':
     settings['multi_thread_no'] = 8
     settings['multi_thread_sync_step'] = 1
     settings['epoch_step'] = 4000000 / settings['train_batch_size'] / settings['multi_thread_no']     
-    """
+
     
     data_file = None    
     #data_file = 'snapshot/breakout/dqn_neon_3100000.prm'
