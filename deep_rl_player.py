@@ -40,9 +40,10 @@ class DeepRLPlayer:
 
         self.train_step = 0
         self.epoch_done = 0
+        self.next_test_thread_no = 0
         self.train_start = time.strftime('%Y%m%d_%H%M%S')
 
-        if self.play_file is None:
+        if self.play_file is None and (self.thread_no == None or self.thread_no == 0):
             log_file="output/%s_%s.log" % (settings['game'], self.train_start)            
             util.Logger(log_file)
         
@@ -81,10 +82,6 @@ class DeepRLPlayer:
         if display_screen:
             self.ale.setBool('display_screen', True)
         self.ale.setFloat('repeat_action_probability', 0)
-        
-        # DJDJ
-        #self.ale.setInt(b'frame_skip', 4)
-        
         self.ale.loadROM(self.settings['rom'])
         self.legal_actions = self.ale.getMinimalActionSet()
         print 'legal_actions: %s' % self.legal_actions
@@ -328,8 +325,12 @@ class DeepRLPlayer:
                    greedy_epsilon, self.train_step)
              
             # Test once every epoch
-            if settings['asynchronousRL'] == False or self.thread_no == 0:
+            if settings['asynchronousRL'] == False:
                 self.test(epoch)
+            else:
+                if self.thread_no == self.next_test_thread_no:
+                    self.test(epoch)
+                self.next_test_thread_no = (self.next_test_thread_no + 1) % self.settings['multi_thread_no']
                     
             self.epoch_done = epoch
                 
@@ -417,14 +418,16 @@ def play(settings, play_file=None):
 if __name__ == '__main__':    
     settings = {}
 
-    settings['game'] = 'breakout'
+    #settings['game'] = 'breakout'
     #settings['game'] = 'space_invaders'
     #settings['game'] = 'enduro'
     #settings['game'] = 'kung_fu_master'
     #settings['game'] = 'krull'
     #settings['game'] = 'hero'
-    #settings['game'] = 'qbert'
+    #settings['game'] = 'qbert'        # Something wrong with reward?
     #settings['game'] = 'seaquest'
+    #settings['game'] = 'pong'
+    settings['game'] = 'beam_rider'
 
     settings['rom'] = '/media/big/download/roms/%s.bin' % settings['game']
     settings['frame_repeat'] = 4    
@@ -447,6 +450,7 @@ if __name__ == '__main__':
     settings['screen_history'] = 4
     settings['learning_rate'] = 0.00025
     settings['rms_decay'] = 0.95
+    settings['rms_epsilon'] = 1e-10
     settings['lost_life_game_over'] = True
     settings['update_step_in_step_no'] = True
     settings['screen_order'] = 'shw'                # dimension order in replay memory. default=(screen, height, width)
@@ -504,17 +508,23 @@ if __name__ == '__main__':
     settings['heap_sort_term'] = 250000
     """
     
+    """
     # Asynchronous RL
     settings['asynchronousRL'] = True
-    settings['train_start'] = settings['train_batch_size'] + settings['screen_history'] - 1 
-    settings['max_replay_memory'] = settings['train_start'] + 100
-    settings['train_step'] = 1
-    settings['train_batch_size'] = 1
+    settings['train_start'] = 100
+    settings['max_replay_memory'] = 100
+    settings['train_step'] = 5
+    settings['train_batch_size'] = 5
     settings['minibatch_random'] = False
+    settings['learning_rate'] = 0.0007
+    settings['rms_decay'] = 0.99
+    settings['rms_epsilon'] = 0.1
     settings['network_type'] = 'nips' 
+    #settings['network_type'] = 'nature' 
     settings['multi_thread_no'] = 8
-    settings['multi_thread_sync_step'] = 5
-
+    settings['multi_thread_sync_step'] = 1
+    settings['epoch_step'] = 4000000 / settings['train_batch_size'] / settings['multi_thread_no']     
+    """
     
     data_file = None    
     #data_file = 'snapshot/breakout/dqn_neon_3100000.prm'

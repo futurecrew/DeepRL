@@ -17,7 +17,7 @@ global_optimizer = None
 global_step_no = 0
 global_lock = threading.Lock()
 
-def init_global(network_type, max_action_no, learning_rate):
+def init_global(network_type, max_action_no, learning_rate, rms_decay, rms_epsilon):
     global global_sess
     global global_model
     global global_vars
@@ -25,11 +25,11 @@ def init_global(network_type, max_action_no, learning_rate):
     global global_optimizer
     global_graph = tf.Graph()
     global_sess = new_session(graph=global_graph)
-    global_optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=.95, epsilon=.01)
-    #global_optimizer = RMSPropApplier(learning_rate, decay=.95, epsilon=.01, device='/gpu:0')
+    global_optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=rms_decay, epsilon=rms_epsilon)
+    #global_optimizer = RMSPropApplier(learning_rate, decay=rms_decay, epsilon=rms_epsilon, device='/gpu:0')
 
     with global_graph.as_default():
-        _, global_model, global_vars = build_network('global', network_type, False, max_action_no)
+        _, global_model, global_vars = build_network('global', network_type, True, max_action_no)
 
 def new_session(graph=None):
     config = tf.ConfigProto()
@@ -147,11 +147,13 @@ class ModelRunnerTF():
         global global_optimizer
         
         learning_rate = settings['learning_rate']
+        rms_decay = settings['rms_decay']
+        rms_epsilon =  settings['rms_epsilon']
         network_type = settings['network_type']
         
         global_lock.acquire()
         if global_sess is None:
-            init_global(network_type, max_action_no, learning_rate)
+            init_global(network_type, max_action_no, learning_rate, rms_decay, rms_epsilon)
             
         self.global_sess = global_sess        
         self.step_no = 0
@@ -191,10 +193,8 @@ class ModelRunnerTF():
                 self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
                 self.loss = tf.reduce_sum(self.errors)
                 
-                optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
-
                 var_refs = [v.ref() for v in self.var_train]
-                self.train_gradients = tf.gradients(
+                train_gradients = tf.gradients(
                     self.loss, var_refs,
                     gate_gradients=False,
                     aggregation_method=None,
@@ -203,21 +203,21 @@ class ModelRunnerTF():
                 acc_gradient_list = []
                 train_step_list = []
                 new_grad_vars = []
-                grad_list = []
+                self.grad_list = []
                 var_list = []
-                for grad, var in zip(self.train_gradients, self.var_train):
-                    acc_gradient = tf.Variable(tf.zeros(grad.get_shape()))
+                for grad, var in zip(train_gradients, global_vars):
+                    acc_gradient = tf.Variable(tf.zeros(grad.get_shape()), trainable=False)
                     acc_gradient_list.append(acc_gradient)
                     train_step_list.append(acc_gradient.assign_add(tf.clip_by_value(grad, -1.0, 1.0)))
                     #train_step_list.append(acc_gradient.assign_add(grad))
                     new_grad_vars.append((tf.convert_to_tensor(acc_gradient, dtype=tf.float32), var))
-                    grad_list.append(acc_gradient)
+                    self.grad_list.append(acc_gradient)
                     var_list.append(var)
                 
                 self.train_step = tf.group(*train_step_list)                
                 self.reset_acc_gradients = tf.initialize_variables(acc_gradient_list)                       
                 self.apply_grads = global_optimizer.apply_gradients(new_grad_vars)
-                #self.apply_grads = global_optimizer.apply_gradients(var_list, grad_list)
+                #self.apply_grads = global_optimizer.apply_gradients(var_list, self.grad_list)
     
                 # build the sync ops
                 sync_list = []
@@ -226,6 +226,7 @@ class ModelRunnerTF():
                 self.sync = tf.group(*sync_list)
 
             else:
+                optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=rms_decay, epsilon=rms_epsilon)
                 if settings['tf_version'] == 'v1':
                     # v1
                     self.difference = tf.abs(self.y_a - self.y_)
@@ -243,7 +244,6 @@ class ModelRunnerTF():
                     else:
                         self.loss = tf.reduce_sum(self.errors2)
             
-                    optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
                     self.train_step = optimizer.minimize(self.loss)
         
                 elif settings['tf_version'] == 'v2':
@@ -260,7 +260,6 @@ class ModelRunnerTF():
                     else:
                         self.loss = tf.reduce_sum(self.errors)
             
-                    optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
                     self.train_step = optimizer.minimize(self.loss)
         
                 elif settings['tf_version'] == 'v3':
@@ -273,7 +272,6 @@ class ModelRunnerTF():
                     self.errors = 0.5 * tf.square(quadratic_part)
                     self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
             
-                    optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
                     self.new_td = tf.mul(quadratic_part, self.priority_weight)
                     self.train_step = optimizer.minimize(self.errors, grad_loss=self.new_td)
         
@@ -287,7 +285,6 @@ class ModelRunnerTF():
                     self.errors = 0.5 * tf.square(quadratic_part)
                     self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
             
-                    optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
                     self.new_td = tf.mul(quadratic_part, self.priority_weight)
                     self.train_step = optimizer.minimize(self.errors, grad_loss=self.new_td)
         
@@ -301,7 +298,6 @@ class ModelRunnerTF():
                     self.errors = 0.5 * tf.square(quadratic_part)
                     self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
             
-                    optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
                     self.weighted_diff = tf.mul(self.difference, self.priority_weight)
                     if self.settings['clip_delta'] == True:  
                         self.new_td = tf.clip_by_value(self.weighted_diff, -1.0, 1.0)
@@ -327,7 +323,6 @@ class ModelRunnerTF():
                     else:
                         self.loss = tf.reduce_sum(self.errors2)
             
-                    optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
                     self.train_step = optimizer.minimize(self.errors2)
                     
                 elif settings['tf_version'] == 'v7':
@@ -340,7 +335,6 @@ class ModelRunnerTF():
                     self.errors = 0.5 * tf.square(quadratic_part)
                     self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
         
-                    optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)
                     self.train_step = optimizer.minimize(self.errors)
         
                 elif settings['tf_version'] == 'v8':
@@ -353,7 +347,6 @@ class ModelRunnerTF():
                     self.errors = 0.5 * tf.square(quadratic_part)
                     self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
             
-                    optimizer = tf.train.RMSPropOptimizer(settings['learning_rate'], decay=.95, epsilon=.01)            
                     self.train_step = optimizer.minimize(self.errors, grad_loss=self.priority_weight)
                     
                 elif settings['tf_version'] == 'v9':
@@ -446,7 +439,7 @@ class ModelRunnerTF():
                 current_time = time.time()
                 if current_time - self.last_time > 10:
                     steps_per_sec = float(global_step_no - self.last_global_step_no) / (current_time - self.last_time)
-                    if debug and self.last_time != 0:
+                    if False and self.last_time != 0:
                         print '%.0f global_step/sec. %.2fM global_step/hour' % (steps_per_sec, steps_per_sec * 3600 / 10**6)
                     self.last_time = current_time
                     self.last_global_step_no = global_step_no
