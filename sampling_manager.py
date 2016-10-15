@@ -3,10 +3,9 @@ from replay_memory import ReplayMemory
 import numpy as np
 
 class SamplingManager:
-    def __init__(self, replay_memory, use_gpu_replay_mem, size, batch_size, history_len, sampling_mode,
+    def __init__(self, replay_memory, size, batch_size, history_len, sampling_mode,
                             sampling_alpha, sampling_beta, sort_term):
         self.replay_memory = replay_memory
-        self.use_gpu_replay_mem = use_gpu_replay_mem
         self.batch_size = batch_size
         self.history_len = history_len
         self.sampling_mode = sampling_mode
@@ -254,12 +253,8 @@ class SamplingManager:
                 break
                 
             # NB! having index first is fastest in C-order matrices
-            if self.use_gpu_replay_mem:
-                self.replay_memory.prestates_view[len(indexes)][:] = self.replay_memory.get_state(replay_index - 1)
-                self.replay_memory.poststates_view[len(indexes)][:] = self.replay_memory.get_state(replay_index)
-            else:            
-                self.replay_memory.prestates[len(indexes), ...] = self.replay_memory.get_state(replay_index - 1)
-                self.replay_memory.poststates[len(indexes), ...] = self.replay_memory.get_state(replay_index)
+            self.replay_memory.prestates[len(indexes), ...] = self.replay_memory.get_state(replay_index - 1)
+            self.replay_memory.poststates[len(indexes), ...] = self.replay_memory.get_state(replay_index)
             indexes.append(replay_index)
             heap_indexes.append(heap_index)
     

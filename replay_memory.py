@@ -6,9 +6,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ReplayMemory:
-  def __init__(self, be, use_gpu_replay_mem, size, batch_size, history_length, width, height, minibatch_random, screen_order='shw'):
-    self.be = be
-    self.use_gpu_replay_mem = use_gpu_replay_mem
+  def __init__(self, size, batch_size, history_length, width, height, minibatch_random, screen_order='shw'):
     self.size = size
     self.minibatch_random = minibatch_random
     self.screen_order = screen_order
@@ -18,13 +16,12 @@ class ReplayMemory:
     if self.screen_order == 'hws':        # (height, width, size)
         screen_dim = (height, width, self.size)
         state_dim = (batch_size, height, width, history_length)
+        self.history_buffer = np.zeros((1, height, width, history_length), dtype=np.float32)
     else:       # (size, height, width)
         screen_dim = (self.size, height, width)
         state_dim = (batch_size, history_length, height, width)
-    if self.use_gpu_replay_mem:
-        self.screens = self.be.empty(screen_dim, dtype = np.uint8)
-    else:
-        self.screens = np.empty(screen_dim, dtype = np.uint8)
+        self.history_buffer = np.zeros((1, history_length, height, width), dtype=np.float32)
+    self.screens = np.empty(screen_dim, dtype = np.uint8)
     self.terminals = np.empty(self.size, dtype = np.bool)
     self.history_length = history_length
     self.dims = (height, width)
@@ -33,14 +30,8 @@ class ReplayMemory:
     self.current = 0
 
     # pre-allocate prestates and poststates for minibatch
-    if self.use_gpu_replay_mem:
-        self.prestates = self.be.empty(state_dim, dtype=np.uint8)
-        self.poststates = self.be.empty(state_dim, dtype=np.uint8)
-        self.prestates_view = [self.prestates[i, ...] for i in xrange(self.batch_size)]
-        self.poststates_view = [self.poststates[i, ...] for i in xrange(self.batch_size)]
-    else:
-        self.prestates = np.empty(state_dim, dtype = np.uint8)
-        self.poststates = np.empty(state_dim, dtype = np.uint8)
+    self.prestates = np.empty(state_dim, dtype = np.uint8)
+    self.poststates = np.empty(state_dim, dtype = np.uint8)
 
     logger.info("Replay memory size: %d" % self.size)
 
@@ -58,6 +49,8 @@ class ReplayMemory:
     self.count = max(self.count, self.current + 1)
     self.current = (self.current + 1) % self.size
     #logger.debug("Memory count %d" % self.count)
+    
+    self.add_to_history_buffer(screen)
     
     return addedIndex
   
@@ -80,18 +73,28 @@ class ReplayMemory:
       else:           # (size, height, width)
         return self.screens[indexes, ...]
 
-  def get_minibatch(self):
-    if self.minibatch_random:
-        return self.get_minibatch_random()
+  def get_current_state(self):
+    if self.current == 0:
+        index = self.size - 1
     else:
-        return self.get_minibatch_sequential()
+        index = self.current - 1
+    return self.get_state(index)
+  
+  def get_minibatch(self, max_size=-1):
+    if self.minibatch_random:
+        return self.get_minibatch_random(max_size)
+    else:
+        return self.get_minibatch_sequential(max_size)
     
-  def get_minibatch_random(self):
+  def get_minibatch_random(self, max_size):
     # memory must include poststate, prestate and history
     assert self.count > self.history_length
+    if max_size == -1:
+        max_size = self.batch_size
+        
     # sample random indexes
     indexes = []
-    while len(indexes) < self.batch_size:
+    while len(indexes) < min(self.batch_size, max_size):
       # find random index 
       while True:
         # sample one index (ignore states wraping over 
@@ -107,12 +110,8 @@ class ReplayMemory:
         break
       
       # NB! having index first is fastest in C-order matrices
-      if self.use_gpu_replay_mem:      
-          self.prestates_view[len(indexes)][:] = self.get_state(index - 1)
-          self.poststates_view[len(indexes)][:] = self.get_state(index)
-      else:            
-          self.prestates[len(indexes), ...] = self.get_state(index - 1)
-          self.poststates[len(indexes), ...] = self.get_state(index)
+      self.prestates[len(indexes), ...] = self.get_state(index - 1)
+      self.poststates[len(indexes), ...] = self.get_state(index)
       indexes.append(index)
 
     # copy actions, rewards and terminals with direct slicing
@@ -121,9 +120,14 @@ class ReplayMemory:
     terminals = self.terminals[indexes]
     return self.prestates, actions, rewards, self.poststates, terminals
 
-  def get_minibatch_sequential(self):
+  def get_minibatch_sequential(self, max_size):
     # memory must include poststate, prestate and history
     assert self.count >= self.batch_size + self.history_length
+    if max_size == -1:
+        max_size = self.batch_size
+        
+    data_size_to_ret = min(self.batch_size, max_size)
+
     # sample random indexes
     indexes = []
     for i in range(self.count):
@@ -139,19 +143,23 @@ class ReplayMemory:
           continue
         
         # NB! having index first is fastest in C-order matrices
-        if self.use_gpu_replay_mem:      
-            self.prestates_view[len(indexes)][:] = self.get_state(index - 1)
-            self.poststates_view[len(indexes)][:] = self.get_state(index)
-        else:            
-            self.prestates[len(indexes), ...] = self.get_state(index - 1)
-            self.poststates[len(indexes), ...] = self.get_state(index)
+        self.prestates[len(indexes), ...] = self.get_state(index - 1)
+        self.poststates[len(indexes), ...] = self.get_state(index)
         indexes.append(index)
 
-        if len(indexes) == self.batch_size:
+        if len(indexes) == data_size_to_ret:
             break
 
     # copy actions, rewards and terminals with direct slicing
     actions = self.actions[indexes]
     rewards = self.rewards[indexes]
     terminals = self.terminals[indexes]
-    return self.prestates, actions, rewards, self.poststates, terminals
+    
+    return self.prestates[:data_size_to_ret, ...], actions, rewards, self.poststates[:data_size_to_ret, ...], terminals
+
+  def add_to_history_buffer(self, state):
+        self.history_buffer[0, :, :, :-1] = self.history_buffer[0, :, :, 1:]
+        self.history_buffer[0, :, :, -1] = state
+
+  def clear_history_buffer(self):
+        self.history_buffer.fill(0)
