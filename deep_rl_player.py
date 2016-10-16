@@ -17,7 +17,7 @@ from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
 
 class DeepRLPlayer:
-    def __init__(self, settings, play_file=None, thread_no=None, global_list=None):
+    def __init__(self, settings, play_file=None, thread_no=0, global_list=None):
         self.settings = settings
         self.play_file = play_file
         self.current_state = None
@@ -467,11 +467,8 @@ class DeepRLPlayer:
                 
                 self.train_step += 1
                 
-                if self.train_step % self.settings['save_step'] == 0 and self.thread_no == 0:
-                    self.save()
-                
                 if game_over:
-                    if episode % 20 == 0:
+                    if episode % 500 == 0:
                         print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
@@ -496,14 +493,18 @@ class DeepRLPlayer:
             print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. learning_rate=%.5f" % \
                   (epoch, float(epoch_total_reward) / episode, 
                    time.time() - epoch_start_time, learning_rate)
+                
+            if self.thread_no == 0:
+                self.save()
              
             # Test once every epoch
-            if settings['asynchronousRL'] == False:
-                self.test(epoch)
-            else:
-                if self.thread_no == self.next_test_thread_no:
+            if settings['run_test'] == True:
+                if settings['asynchronousRL'] == False:
                     self.test(epoch)
-                self.next_test_thread_no = (self.next_test_thread_no + 1) % self.settings['multi_thread_no']
+                else:
+                    if self.thread_no == self.next_test_thread_no:
+                        self.test(epoch)
+                    self.next_test_thread_no = (self.next_test_thread_no + 1) % self.settings['multi_thread_no']
 
             self.epoch_done = epoch
                 
@@ -602,14 +603,7 @@ def train(settings, save_file=None):
 
 def play(settings, play_file=None):
     print 'Play using data_file: %s' % play_file
-    import tensorflow as tf
-    #sess = tf.Session(config=tf.ConfigProto(log_device_placement=False,
-    #                            allow_soft_placement=True))
-    config = tf.ConfigProto()
-    config.gpu_options.per_process_gpu_memory_fraction = 0.2
-    sess = tf.Session(config=config)
-    
-    player = DeepRLPlayer(settings, play_file, sess=sess)
+    player = DeepRLPlayer(settings, play_file)
     player.model_runner.load(play_file + '.weight')
     player.test(0)
     
@@ -659,6 +653,7 @@ if __name__ == '__main__':
     settings['network_type'] = 'nature'           # nature or nips
     settings['multi_thread_no'] = 0                 # Number of multiple threads for Asynchronous RL
     settings['asynchronousRL'] = False
+    settings['run_test'] = True
 
     #settings['backend'] = 'NEON'
     settings['backend'] = 'TF'
@@ -724,17 +719,17 @@ if __name__ == '__main__':
 
     settings['miyosuda_loss'] = True
     settings['choose_max_action'] = False
-    settings['lost_life_terminal'] = False    
+    settings['lost_life_terminal'] = False
     settings['lost_life_game_over'] = False    
-    settings['global_step_annealing'] = True    
+    settings['run_test'] = False
 
     # DJDJ    
     #settings['epoch_step'] = 1200
     #settings['test_step'] = 250
+    #settings['save_step'] = 30
     
     data_file = None    
-    #data_file = 'snapshot/breakout/dqn_neon_3100000.prm'
-    #data_file = 'snapshot/%s/%s' % (settings['game'], '20161006_161936/dqn_450000')
+    #data_file = 'snapshot/%s/%s' % (settings['game'], '20161016_014958/dqn_610290')
     
     train(settings, data_file)
     #play(settings, data_file)

@@ -2,18 +2,18 @@ import tensorflow as tf
 import numpy as np
 import math
 
+def new_session(graph=None):
+    config = tf.ConfigProto()
+    #config.gpu_options.allow_growth = True
+    config.gpu_options.per_process_gpu_memory_fraction = 0.2
+    return tf.Session(config=config, graph=graph)
+
 class Model(object):
     def __init__(self, name, network_type, trainable, max_action_no):
         self.network_type = network_type
         self.max_action_no = max_action_no
         self.build_network(name, network_type, trainable, max_action_no)
     
-    def new_session(self, graph=None):
-        config = tf.ConfigProto()
-        #config.gpu_options.allow_growth = True
-        config.gpu_options.per_process_gpu_memory_fraction = 0.2
-        return tf.Session(config=config, graph=graph)
-        
     def make_layer_variables(self, shape, trainable, name_suffix):
         stdv = 1.0 / math.sqrt(np.prod(shape[0:-1]))
         weights = tf.Variable(tf.random_uniform(shape, minval=-stdv, maxval=stdv), trainable=trainable, name='W_' + name_suffix)
@@ -120,7 +120,7 @@ class Model(object):
         return self.variables
     
     def prepare_global(self, rms_decay, rms_epsilon):
-        global_sess = self.new_session()
+        global_sess = new_session()
         global_learning_rate = tf.placeholder("float")
         global_optimizer = tf.train.RMSPropOptimizer(global_learning_rate, decay=rms_decay, epsilon=rms_epsilon)        
         global_vars = self.get_vars()
@@ -194,8 +194,8 @@ class ModelAsyncA3C(Model):
             # Second layer convolves 16 8x8 filters with stride 4 with relu
             W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 16], trainable, "conv1")
     
-            #h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
-            h_conv1 = tf.nn.relu(tf.nn.conv2d(x_in, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
+            h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
+            #h_conv1 = tf.nn.relu(tf.nn.conv2d(x_in, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
     
             # Third layer convolves 32 4x4 filters with stride 2 with relu

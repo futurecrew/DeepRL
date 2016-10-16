@@ -5,21 +5,35 @@ import math
 import time
 import threading
 import tensorflow as tf
+from network_model import new_session
 
 class ModelRunnerTFAsync():
     def __init__(self, global_list, settings,  max_action_no, thread_no):
-        self.sess, self.global_vars, self.global_optimizer, self.global_learning_rate = global_list
         self.max_action_no = max_action_no
         self.discount_factor = settings['discount_factor']
+        self.network_type = settings['network_type']
         self.thread_no = thread_no
         
-        self.init_models(settings['network_type'], max_action_no)
+        if global_list == None:
+            self.play_mode = True
+        else:
+            self.play_mode = False
+        
+        if self.play_mode == False:
+            self.sess, self.global_vars, self.global_optimizer, self.global_learning_rate = global_list
+            if self.thread_no == 0:
+                self.init_save()
+        else:
+            self.sess = new_session()
 
-    def init_models(self, network_type, max_action_no):
-        self.x_in, self.y, self.var_train = self.build_network('policy', network_type, True, max_action_no)
-        self.x_target, self.y_target, self.var_target = self.build_network('target', network_type, False, max_action_no)
+        self.init_models()
+        self.saver = tf.train.Saver(max_to_keep=25)
+        
+    def init_models(self):
+        self.x_in, self.y, self.var_train = self.build_network('policy', self.network_type, True, self.max_action_no)
+        self.x_target, self.y_target, self.var_target = self.build_network('target', self.network_type, False, self.max_action_no)
 
-        self.a_in = tf.placeholder(tf.float32, shape=[None, max_action_no])
+        self.a_in = tf.placeholder(tf.float32, shape=[None, self.max_action_no])
         print('a_in %s' % (self.a_in.get_shape()))
         self.y_ = tf.placeholder(tf.float32, [None])
         print('y_ %s' % (self.y_.get_shape()))
@@ -33,11 +47,12 @@ class ModelRunnerTFAsync():
         loss = tf.reduce_sum(self.errors)
         
         self.init_gradients(loss)
-
-        self.saver = tf.train.Saver(max_to_keep=25)
         self.sess.run(tf.initialize_all_variables())
 
     def init_gradients(self, loss, var_train):
+        if self.play_mode:
+            return
+        
         var_refs = [v.ref() for v in var_train]
         train_gradients = tf.gradients(
             loss, var_refs,
@@ -69,7 +84,16 @@ class ModelRunnerTFAsync():
         for i in range(0, len(self.global_vars)):
             sync_list.append(var_train[i].assign(self.global_vars[i]))
         self.sync = tf.group(*sync_list)
-            
+    
+    def init_save(self):
+        save_model = self.new_model('save')
+        self.save_vars = save_model.get_vars()
+        sync_list = []
+        for i in range(0, len(self.global_vars)):
+            sync_list.append(self.save_vars[i].assign(self.global_vars[i]))
+        self.save_sync = tf.group(*sync_list)
+        #self.save_sess = new_session()
+        
     def train(self, minibatch, replay_memory, debug):
         if self.settings['prioritized_replay'] == True:
             prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
@@ -120,10 +144,8 @@ class ModelRunnerTFAsync():
         self.saver.restore(self.sess, fileName)
 
     def save(self, fileName):
-        """
-        self.save_sess.run(tf.initialize_variables(self.save_var_list))
-        self.save_sess.run(self.save_sync)
-        self.saver.save(self.save_sess, fileName)
-        """
-        pass
+        self.sess.run(tf.initialize_variables(self.save_vars))
+        self.sess.run(self.save_sync)
+        self.saver.save(self.sess, fileName)
         
+        print 'saved to %s' % fileName

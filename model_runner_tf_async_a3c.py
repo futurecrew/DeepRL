@@ -9,10 +9,10 @@ from model_runner_tf_async import ModelRunnerTFAsync
 from network_model import ModelAsyncA3C
             
 class ModelRunnerTFAsyncA3C(ModelRunnerTFAsync):
-    def init_models(self, network_type, max_action_no):
-        self.model = ModelAsyncA3C('net-' + str(self.thread_no), network_type, True, max_action_no)
+    def init_models(self):
+        self.model = self.new_model('net-' + str(self.thread_no))
 
-        self.a_in = tf.placeholder(tf.float32, shape=[None, max_action_no])
+        self.a_in = tf.placeholder(tf.float32, shape=[None, self.max_action_no])
         self.v_in = tf.placeholder(tf.float32, shape=[None])
         self.td_in = tf.placeholder(tf.float32, shape=[None])
         self.x_in = self.model.x
@@ -22,6 +22,9 @@ class ModelRunnerTFAsyncA3C(ModelRunnerTFAsync):
         loss = self.get_loss()
         self.init_gradients(loss, self.model.get_vars())
         
+    def new_model(self, name):
+        return ModelAsyncA3C(name, self.network_type, True, self.max_action_no)
+    
     def get_loss(self):
         """
         y_class_a = tf.reduce_sum(tf.mul(self.y_class, self.a_in), reduction_indices=1)
