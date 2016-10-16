@@ -222,6 +222,7 @@ class DeepRLPlayer:
                 print '{} : '.format(key).ljust(30) + '{}'.format(self.settings[key])
         
     def reset_game(self):
+        self.replay_memory.clear_history_buffer()
         self.ale.reset_game()
         self.current_state = None
         action_index = 0
@@ -723,11 +724,6 @@ if __name__ == '__main__':
     settings['lost_life_game_over'] = False    
     settings['run_test'] = False
 
-    # DJDJ    
-    #settings['epoch_step'] = 1200
-    #settings['test_step'] = 250
-    #settings['save_step'] = 30
-    
     data_file = None    
     #data_file = 'snapshot/%s/%s' % (settings['game'], '20161016_014958/dqn_610290')
     

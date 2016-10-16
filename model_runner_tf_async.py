@@ -68,18 +68,16 @@ class ModelRunnerTFAsync():
         for grad, var in zip(train_gradients, self.global_vars):
             acc_gradient = tf.Variable(tf.zeros(grad.get_shape()), trainable=False)
             acc_gradient_list.append(acc_gradient)
-            train_step_list.append(acc_gradient.assign_add(tf.clip_by_value(grad, -1.0, 1.0)))
-            #train_step_list.append(acc_gradient.assign_add(grad))
+            train_step_list.append(acc_gradient.assign_add(grad))
             new_grad_vars.append((tf.convert_to_tensor(acc_gradient, dtype=tf.float32), var))
             self.grad_list.append(acc_gradient)
             var_list.append(var)
         
         self.train_step = tf.group(*train_step_list)                
-        self.reset_acc_gradients = tf.initialize_variables(acc_gradient_list)                       
+        
+        self.reset_acc_gradients = tf.initialize_variables(acc_gradient_list)        
         self.apply_grads = self.global_optimizer.apply_gradients(new_grad_vars)
-        #self.apply_grads = self.global_optimizer.apply_gradients(var_list, self.grad_list)
 
-        # build the sync ops
         sync_list = []
         for i in range(0, len(self.global_vars)):
             sync_list.append(var_train[i].assign(self.global_vars[i]))
@@ -92,7 +90,6 @@ class ModelRunnerTFAsync():
         for i in range(0, len(self.global_vars)):
             sync_list.append(self.save_vars[i].assign(self.global_vars[i]))
         self.save_sync = tf.group(*sync_list)
-        #self.save_sess = new_session()
         
     def train(self, minibatch, replay_memory, debug):
         if self.settings['prioritized_replay'] == True:

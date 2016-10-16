@@ -122,7 +122,7 @@ class Model(object):
     def prepare_global(self, rms_decay, rms_epsilon):
         global_sess = new_session()
         global_learning_rate = tf.placeholder("float")
-        global_optimizer = tf.train.RMSPropOptimizer(global_learning_rate, decay=rms_decay, epsilon=rms_epsilon)        
+        global_optimizer = tf.train.RMSPropOptimizer(global_learning_rate, decay=rms_decay, epsilon=rms_epsilon)
         global_vars = self.get_vars()
     
         return global_sess, global_vars, global_optimizer, global_learning_rate
@@ -195,7 +195,6 @@ class ModelAsyncA3C(Model):
             W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 16], trainable, "conv1")
     
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
-            #h_conv1 = tf.nn.relu(tf.nn.conv2d(x_in, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
     
             # Third layer convolves 32 4x4 filters with stride 2 with relu
