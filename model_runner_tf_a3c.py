@@ -6,9 +6,9 @@ import time
 import threading
 import tensorflow as tf
 from model_runner_tf_async import ModelRunnerTFAsync
-from network_model import ModelAsyncA3C
+from network_model import ModelA3C
             
-class ModelRunnerTFAsyncA3C(ModelRunnerTFAsync):
+class ModelRunnerTFA3C(ModelRunnerTFAsync):
     def init_models(self):
         self.model = self.new_model('net-' + str(self.thread_no))
 
@@ -18,12 +18,12 @@ class ModelRunnerTFAsyncA3C(ModelRunnerTFAsync):
         self.x_in = self.model.x
         self.y_class = self.model.y_class
         self.v = self.model.v
-
+        
         loss = self.get_loss()
         self.init_gradients(loss, self.model.get_vars())
         
     def new_model(self, name):
-        return ModelAsyncA3C(name, self.network_type, True, self.max_action_no)
+        return ModelA3C(name, self.network_type, True, self.max_action_no)
     
     def get_loss(self):
         """
@@ -51,10 +51,12 @@ class ModelRunnerTFAsyncA3C(ModelRunnerTFAsync):
         return y_class[0], v[0]
 
     def predict_state(self, state):
-        return self.sess.run(self.v, {self.x_in: state})[0]
+        v = self.sess.run(self.v, {self.x_in: state})
+        return v[0]
 
     def predict(self, state):
-        return self.sess.run(self.y_class, {self.x_in: state})[0]
+        y_class = self.sess.run(self.y_class, {self.x_in: state})
+        return y_class[0]
 
     def train(self, prestates, v_pres, actions, rewards, terminals, v_post, learning_rate):
         data_len = len(actions)
@@ -77,7 +79,7 @@ class ModelRunnerTFAsyncA3C(ModelRunnerTFAsync):
             self.v_in: v_in,
             self.td_in: td_in
         })
-
+        
         self.sess.run( self.apply_grads,
               feed_dict = { self.global_learning_rate: learning_rate } )
         self.sess.run(self.reset_acc_gradients)

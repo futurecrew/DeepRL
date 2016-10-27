@@ -15,6 +15,12 @@ import util
 import png
 from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
+from model_runner_neon import ModelRunnerNeon
+from model_runner_tf_a3c import ModelRunnerTFA3C
+from model_runner_tf_a3c_lstm import ModelRunnerTFA3CLstm
+from model_runner_tf_async import ModelRunnerTFAsync
+from model_runner_tf import ModelRunnerTF
+from network_model import ModelA3C, ModelA3CLstm
 
 class DeepRLPlayer:
     def __init__(self, settings, play_file=None, thread_no=0, global_list=None):
@@ -102,7 +108,6 @@ class DeepRLPlayer:
         
     def initialize_model(self):
         if self.settings['backend'] == 'NEON':
-            from model_runner_neon import ModelRunnerNeon
             self.model_runner = ModelRunnerNeon(
                                     self.settings, 
                                     max_action_no = len(self.legal_actions),
@@ -111,15 +116,20 @@ class DeepRLPlayer:
         elif self.settings['backend'] == 'TF':
             if self.settings['asynchronousRL'] == True:
                 if self.settings['asynchronousRL_type'] == 'A3C':            
-                    from model_runner_tf_async_a3c import ModelRunnerTFAsyncA3C
-                    self.model_runner = ModelRunnerTFAsyncA3C(
+                    self.model_runner = ModelRunnerTFA3C(
+                                    self.global_list,
+                                    self.settings, 
+                                    max_action_no = len(self.legal_actions),
+                                    thread_no = self.thread_no
+                                    )
+                elif self.settings['asynchronousRL_type'] == 'A3C_LSTM':            
+                    self.model_runner = ModelRunnerTFA3CLstm(
                                     self.global_list,
                                     self.settings, 
                                     max_action_no = len(self.legal_actions),
                                     thread_no = self.thread_no
                                     )
                 else:
-                    from model_runner_tf_async import ModelRunnerTFAsync
                     self.model_runner = ModelRunnerTFAsync(
                                     self.global_list,
                                     self.settings, 
@@ -127,7 +137,6 @@ class DeepRLPlayer:
                                     thread_no = self.thread_no
                                     )
             else:
-                from model_runner_tf import ModelRunnerTF
                 self.model_runner = ModelRunnerTF(
                                     self.settings, 
                                     max_action_no = len(self.legal_actions),
@@ -226,6 +235,10 @@ class DeepRLPlayer:
         self.ale.reset_game()
         self.current_state = None
         action_index = 0
+        
+        if self.settings['asynchronousRL_type'] == 'A3C_LSTM':
+            self.model_runner.reset_lstm_state()
+        
         for _ in range(random.randint(4, 30)):
             reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
             self.replay_memory.add(action_index, reward, state, terminal)
@@ -469,7 +482,8 @@ class DeepRLPlayer:
                 self.train_step += 1
                 
                 if game_over:
-                    if episode % 500 == 0:
+                    #if episode % 500 == 0:
+                    if episode % 20 == 0:
                         print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
@@ -509,7 +523,7 @@ class DeepRLPlayer:
 
             self.epoch_done = epoch
                 
-        #self.model_runner.finish_train()
+        print 'thread %s finished' % self.thread_no
 
     def save(self):
         timesnapshot_folder = self.snapshot_folder + '/' + self.train_start
@@ -573,20 +587,22 @@ def train(settings, save_file=None):
             legal_actions = ale.getMinimalActionSet()
             
             # initialize global settings
-            from network_model import ModelAsyncA3C
-            modelA3C = ModelAsyncA3C('global', settings['network_type'], True,  len(legal_actions))
+            if settings['asynchronousRL_type'] == 'A3C':
+                model = ModelA3C('global', settings['network_type'], True,  len(legal_actions))
+            elif settings['asynchronousRL_type'] == 'A3C_LSTM':     
+                model = ModelA3CLstm('global', settings['network_type'], True,  len(legal_actions))
 
-            global_list = modelA3C.prepare_global(settings['rms_decay'], settings['rms_epsilon'])
+            global_list = model.prepare_global(settings['rms_decay'], settings['rms_epsilon'])
 
             for i in range(settings['multi_thread_no']):        
                 print 'creating a thread[%s]' % i
                 player = DeepRLPlayer(settings, thread_no= i, global_list=global_list)
                 playerList.append(player)
 
-            modelA3C.init_global(global_list[0])
+            model.init_global(global_list[0])
 
             for player in playerList:
-                if settings['asynchronousRL_type'] == 'A3C':
+                if settings['asynchronousRL_type'].startswith('A3C'):
                     target_func = player.train_async_a3c
                 else:
                     target_func = player.train
@@ -594,8 +610,8 @@ def train(settings, save_file=None):
                 t.start()
                 threadList.append(t)
                 
-            while True:
-                time.sleep(1000)
+            for thread in threadList:
+                thread.join()
             
         else:
             player = DeepRLPlayer(settings)
@@ -611,8 +627,8 @@ def play(settings, play_file=None):
 if __name__ == '__main__':    
     settings = {}
 
-    settings['game'] = 'breakout'
-    #settings['game'] = 'space_invaders'
+    #settings['game'] = 'breakout'
+    settings['game'] = 'space_invaders'
     #settings['game'] = 'enduro'
     #settings['game'] = 'kung_fu_master'
     #settings['game'] = 'krull'
@@ -702,7 +718,8 @@ if __name__ == '__main__':
 
     # Asynchronous RL
     settings['asynchronousRL'] = True
-    settings['asynchronousRL_type'] = 'A3C'
+    settings['asynchronousRL_type'] = 'A3C_LSTM'
+    #settings['asynchronousRL_type'] = 'A3C'
     #settings['asynchronousRL_type'] = '1Q'
     settings['train_start'] = 100
     settings['max_epoch'] = 25
@@ -725,7 +742,8 @@ if __name__ == '__main__':
     settings['run_test'] = False
 
     data_file = None    
-    #data_file = 'snapshot/%s/%s' % (settings['game'], '20161016_014958/dqn_610290')
+
+    #data_file = 'snapshot/%s/%s' % (settings['game'], '20161021_060807/dqn_1301882')
+    #play(settings, data_file)
     
     train(settings, data_file)
-    #play(settings, data_file)
