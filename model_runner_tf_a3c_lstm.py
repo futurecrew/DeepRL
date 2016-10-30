@@ -19,13 +19,13 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
         self.y_class = self.model.y_class
         self.v = self.model.v
         
-        # DJDJ
-        self.lstm_initialized_train = False
-        self.lstm_initialized_predict = False
         self.lstm_state = self.model.lstm_state
         self.lstm_next_state = self.model.lstm_next_state
         self.sequence_length = self.model.sequence_length
         self.state_input = np.zeros([5, 84, 84, 4], dtype=np.uint8)
+        self.lstm_hidden_size = 256
+        
+        self.reset_lstm_state()
 
         loss = self.get_loss()
         self.init_gradients(loss, self.model.get_vars())
@@ -75,68 +75,53 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
         return loss
         
     def predict_action_state(self, state):
-        #y_class, v = self.sess.run([self.y_class, self.v], {self.x_in: state})
         self.state_input.fill(0)
         self.state_input[0, :, :, :] = state
-        if self.lstm_initialized_predict == False:
-            hidden_size = 256
-            self.lstm_state_predict_value = np.zeros((1, hidden_size * 2))
-            self.lstm_initialized_predict = True
             
-        #print 'self.sequence_length 1 : 1'
-            
-        y_class, v, self.lstm_state_predict_value = self.sess.run([self.y_class, self.v, self.lstm_next_state], feed_dict={
+        y_class, v, self.lstm_state_value = self.sess.run([self.y_class, self.v, self.lstm_next_state], feed_dict={
                         self.x_in: self.state_input,
-                        self.lstm_state: self.lstm_state_predict_value,
-                        self.sequence_length : 1,
+                        self.lstm_state: self.lstm_state_value,
+                        self.sequence_length : [1],
                         })
+        
         return y_class[0], v[0]
 
     def predict_state(self, state):
-        #v = self.sess.run(self.v, {self.x_in: state})
         self.state_input.fill(0)
         self.state_input[0, :, :, :] = state
-        if self.lstm_initialized_predict == False:
-            hidden_size = 256
-            self.lstm_state_predict_value = np.zeros((1, hidden_size * 2))
-            self.lstm_initialized_predict = True
             
-        #print 'self.sequence_length 2 : 1'
-            
-        v, self.lstm_state_predict_value = self.sess.run([self.v, self.lstm_next_state], feed_dict={
+        # don't update self.lstm_state_value
+        # because this function does not process to a new screen frame
+        v, _ = self.sess.run([self.v, self.lstm_next_state], feed_dict={
                         self.x_in: self.state_input,
-                        self.lstm_state: self.lstm_state_predict_value,
-                        self.sequence_length : 1,
+                        self.lstm_state: self.lstm_state_value,
+                        self.sequence_length : [1],
                         })
         return v[0]
 
     def predict(self, state):
-        # DJDJ
-        #y_class = self.sess.run(self.y_class, {self.x_in: state})
         self.state_input.fill(0)
         self.state_input[0, :, :, :] = state
-        if self.lstm_initialized_predict == False:
-            hidden_size = 256
-            self.lstm_state_predict_value = np.zeros((1, hidden_size * 2))
-            self.lstm_initialized_predict = True
             
-        #print 'self.sequence_length 3 : 1'
-            
-        y_class, self.lstm_state_predict_value = self.sess.run([self.y_class, self.lstm_next_state], feed_dict={
+        y_class, self.lstm_state_value = self.sess.run([self.y_class, self.lstm_next_state], feed_dict={
                         self.x_in: self.state_input,
-                        self.lstm_state: self.lstm_state_predict_value,
-                        self.sequence_length : 1,
+                        self.lstm_state: self.lstm_state_value,
+                        self.sequence_length : [1],
                         })
         return y_class[0]
 
     def reset_lstm_state(self):
-        self.lstm_initialized_train = False
-        self.lstm_initialized_predict = False
+        self.lstm_state_value = np.zeros((1, self.lstm_hidden_size * 2))
+
+    def get_lstm_state(self):
+        return self.lstm_state_value.copy()
+
+    def set_lstm_state(self, lstm_state_value):
+        self.lstm_state_value = lstm_state_value
 
     def train(self, prestates, v_pres, actions, rewards, terminals, v_post, learning_rate):
         data_len = len(actions)
-
-        batch_size = 5
+        
         self.state_input.fill(0)
         action_mat = np.zeros((data_len, self.max_action_no), dtype=np.uint8)
         v_in = np.zeros(data_len)
@@ -144,8 +129,7 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
         
         R = v_post
         for i in range(data_len):
-            reverse_i = data_len - i - 1
-            self.state_input[i, :, :, :] = prestates[i, :, :, :]
+            self.state_input[i, :, :, :] = prestates[data_len - i - 1, :, :, :]
             action_mat[i, actions[i]] = 1
             clipped_reward = self.clip_reward(rewards[i])
             v_in[i] = clipped_reward + self.discount_factor * R
@@ -153,34 +137,17 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
             R = v_in[i]
 
         # Make input data time sequential for LSTM input
-        self.state_input = self.state_input[::-1, :]
         action_mat = action_mat[::-1, :]
         v_in = v_in[::-1]
         td_in = td_in[::-1]
-            
-        """
-        self.sess.run(self.train_step, feed_dict={
-            self.x_in: prestates,
-            self.a_in: action_mat,
-            self.v_in: v_in,
-            self.td_in: td_in
-        })
-        """
         
-        #print 'self.sequence_length : data_len %s' % data_len
-        
-        if self.lstm_initialized_train == False:
-            hidden_size = 256
-            self.lstm_state_tain_value = np.zeros((1, hidden_size * 2))
-            self.lstm_initialized_train = True
-        
-        _, self.lstm_state_tain_value = self.sess.run([self.train_step, self.lstm_next_state], feed_dict={
+        _, self.lstm_state_value = self.sess.run([self.train_step, self.lstm_next_state], feed_dict={
             self.x_in: self.state_input,
             self.a_in: action_mat,
             self.v_in: v_in,
             self.td_in: td_in,
-            self.lstm_state : self.lstm_state_tain_value,
-            self.sequence_length : data_len,
+            self.lstm_state : self.lstm_state_value,
+            self.sequence_length : [data_len],
         })
         
         self.sess.run( self.apply_grads,

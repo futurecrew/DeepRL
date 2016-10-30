@@ -278,7 +278,7 @@ class ModelA3CLstm(Model):
         self.y = y
         self.variables = [W_conv1, b_conv1, W_conv2, b_conv2, W_conv3, b_conv3, W_fc1, b_fc1, W_fc2, b_fc2]
         
-    def build_network_nips(self, name, trainable, num_actions, lstm):
+    def build_network_nips(self, name, trainable, num_actions):
         
         print("Building network for %s trainable=%s" % (name, trainable))
     
@@ -311,7 +311,6 @@ class ModelA3CLstm(Model):
             h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, W_fc1) + b_fc1, name="h_fc1")
             print(h_fc1)
     
-            # DJDJ
             with tf.variable_scope('LSTM'):
                 hidden_size = 256
                 batch_size = 5
@@ -320,34 +319,34 @@ class ModelA3CLstm(Model):
                 cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size, forget_bias=1.0)
                 h_fc1_split = tf.split(0, batch_size, h_fc1)
                 print h_fc1_split
-                output_list, self.lstm_next_state = tf.nn.rnn(cell, h_fc1_split, initial_state=self.lstm_state, sequence_length=self.sequence_length)
-                print('output_list : %s' % output_list)
-                outputs = tf.pack(output_list)
+                self.output_list, self.lstm_next_state = tf.nn.rnn(cell, h_fc1_split, initial_state=self.lstm_state, sequence_length=self.sequence_length)
+                print('output_list : %s' % self.output_list)
+                outputs = tf.pack(self.output_list)
                 print('outputs : %s' % outputs)
                 outputs2 = tf.squeeze(outputs, [1])
                 print('outputs2 : %s' % outputs2)
                 #outputs3 = tf.reshape(outputs2, tf.pack([self.sequence_length, hidden_size]))
-                outputs3 = outputs2[:self.sequence_length, :]
-                print('outputs3 : %s'  % outputs3)
+                self.outputs3 = outputs2[:self.sequence_length[0], :]
+                print('outputs3 : %s'  % self.outputs3)
                 
                 #self.lstm_initial_state = cell.zero_state(batch_size, tf.float32)
                 #self.lstm_state = self.lstm_initial_state
                 #(h_lstm, self.lstm_final_state) = cell(h_fc1, self.lstm_state)
                 
                 tvars = tf.trainable_variables()
-                lstm_vars = [tvar for tvar in tvars if tvar.name.startswith('LSTM') ]
+                lstm_vars = [tvar for tvar in tvars if tvar.name.startswith(name + '/' + 'LSTM')]
         
             W_fc2, b_fc2 = self.make_layer_variables([256, num_actions], trainable, "fc2")
     
             #y = tf.matmul(h_fc1, W_fc2) + b_fc2
-            y = tf.matmul(outputs3, W_fc2) + b_fc2
+            y = tf.matmul(self.outputs3, W_fc2) + b_fc2
             print(y)
             
             y_class = tf.nn.softmax(y)
             
             W_fc3, b_fc3 = self.make_layer_variables([256, 1], trainable, "fc3")
             #v_ = tf.matmul(h_fc1, W_fc3) + b_fc3
-            v_ = tf.matmul(outputs3, W_fc3) + b_fc3
+            v_ = tf.matmul(self.outputs3, W_fc3) + b_fc3
             v = tf.reshape(v_, [-1] )
         
         self.x = x_in

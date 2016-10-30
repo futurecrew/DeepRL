@@ -452,7 +452,8 @@ class DeepRLPlayer:
             
             while step_no < self.settings['epoch_step']:
                 v_pres = []
-                
+    
+                lstm_state_value = self.model_runner.get_lstm_state()            
                 for i in range(self.settings['train_step']):
                     action_index, state_value = self.get_action_state_value('TRAIN')
                     reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
@@ -477,13 +478,14 @@ class DeepRLPlayer:
                     v_post = self.get_state_value()
                 prestates, actions, rewards, _, terminals = self.replay_memory.get_minibatch(data_len)
                 learning_rate = self._anneal_learning_rate(max_global_step_no, global_step_no)
+
+                self.model_runner.set_lstm_state(lstm_state_value)            
                 self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate)
-                
+
                 self.train_step += 1
                 
                 if game_over:
-                    #if episode % 500 == 0:
-                    if episode % 20 == 0:
+                    if episode % 500 == 0:
                         print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
@@ -743,7 +745,7 @@ if __name__ == '__main__':
 
     data_file = None    
 
-    #data_file = 'snapshot/%s/%s' % (settings['game'], '20161021_060807/dqn_1301882')
+    #data_file = 'snapshot/%s/%s' % (settings['game'], '20161029_144923/dqn_200675')
     #play(settings, data_file)
     
     train(settings, data_file)
