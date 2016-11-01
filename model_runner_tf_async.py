@@ -8,10 +8,11 @@ import tensorflow as tf
 from network_model import new_session
 
 class ModelRunnerTFAsync():
-    def __init__(self, global_list, settings,  max_action_no, thread_no):
+    def __init__(self, global_list, args,  max_action_no, thread_no):
+        self.args = args
         self.max_action_no = max_action_no
-        self.discount_factor = settings['discount_factor']
-        self.network_type = settings['network_type']
+        self.discount_factor = args.discount_factor
+        self.network_type = args.network_type
         self.thread_no = thread_no
         
         if global_list == None:
@@ -92,7 +93,7 @@ class ModelRunnerTFAsync():
         self.save_sync = tf.group(*sync_list)
         
     def train(self, minibatch, replay_memory, debug):
-        if self.settings['prioritized_replay'] == True:
+        if self.args.prioritized_replay == True:
             prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
         else:
             prestates, actions, rewards, poststates, terminals = minibatch
@@ -101,7 +102,7 @@ class ModelRunnerTFAsync():
         
         y2 = self.y_target.eval(feed_dict={self.x_target: poststates}, session=self.sess)
         
-        if self.settings['double_dqn'] == True:
+        if self.args.double_dqn == True:
             y3 = self.y.eval(feed_dict={self.x_in: poststates}, session=self.sess)
 
         self.action_mat.fill(0)
@@ -113,7 +114,7 @@ class ModelRunnerTFAsync():
             if terminals[i]:
                 y_[i] = clipped_reward
             else:
-                if self.settings['double_dqn'] == True:
+                if self.args.double_dqn == True:
                     max_index = np.argmax(y3[i])
                     y_[i] = clipped_reward + self.discount_factor * y2[i][max_index]
                 else:

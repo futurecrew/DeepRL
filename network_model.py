@@ -5,7 +5,7 @@ import math
 def new_session(graph=None):
     config = tf.ConfigProto()
     #config.gpu_options.allow_growth = True
-    config.gpu_options.per_process_gpu_memory_fraction = 0.2
+    #config.gpu_options.per_process_gpu_memory_fraction = 0.2
     return tf.Session(config=config, graph=graph)
 
 class Model(object):

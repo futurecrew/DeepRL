@@ -9,16 +9,16 @@ import pickle
 import tensorflow as tf
 
 class ModelRunnerTF(object):
-    def __init__(self, settings,  max_action_no, batch_dimension):
-        learning_rate = settings['learning_rate']
-        rms_decay = settings['rms_decay']
-        rms_epsilon =  settings['rms_epsilon']
-        self.network_type = settings['network_type']
+    def __init__(self, args,  max_action_no, batch_dimension):
+        self.args = args
+        learning_rate = args.learning_rate
+        rms_decay = args.rms_decay
+        rms_epsilon =  args.rms_epsilon
+        self.network_type = args.network_type
         
         self.step_no = 0
-        self.settings = settings
-        self.train_batch_size = settings['train_batch_size']
-        self.discount_factor = settings['discount_factor']
+        self.train_batch_size = args.train_batch_size
+        self.discount_factor = args.discount_factor
         self.max_action_no = max_action_no
         self.be = None
         self.action_mat = np.zeros((self.train_batch_size, self.max_action_no))
@@ -50,18 +50,13 @@ class ModelRunnerTF(object):
         linear_part = self.difference - quadratic_part
         #self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
         self.errors = 0.5 * tf.square(self.difference)
-        if self.settings['prioritized_replay'] == True:
+        if self.args.prioritized_replay == True:
             self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
             self.errors2 = tf.mul(self.errors, self.priority_weight)
         else:
             self.errors2 = self.errors
-        if self.settings['clip_delta'] == True:  
-            self.loss = tf.reduce_sum(tf.clip_by_value(self.errors2, 0.0, 1.0))
-        else:
-            self.loss = tf.reduce_sum(self.errors2)
-
+        self.loss = tf.reduce_sum(tf.clip_by_value(self.errors2, 0.0, 1.0))
         self.train_step = optimizer.minimize(self.loss)
-        
         self.saver = tf.train.Saver(max_to_keep=25)
 
         # Initialize variables
@@ -82,7 +77,7 @@ class ModelRunnerTF(object):
     def train(self, minibatch, replay_memory, debug):
         global global_step_no
 
-        if self.settings['prioritized_replay'] == True:
+        if self.args.prioritized_replay == True:
             prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
         else:
             prestates, actions, rewards, poststates, terminals = minibatch
@@ -91,7 +86,7 @@ class ModelRunnerTF(object):
         
         y2 = self.y_target.eval(feed_dict={self.x_target: poststates}, session=self.sess)
         
-        if self.settings['double_dqn'] == True:
+        if self.args.double_dqn == True:
             y3 = self.y.eval(feed_dict={self.x_in: poststates}, session=self.sess)
 
         self.action_mat.fill(0)
@@ -103,13 +98,13 @@ class ModelRunnerTF(object):
             if terminals[i]:
                 y_[i] = clipped_reward
             else:
-                if self.settings['double_dqn'] == True:
+                if self.args.double_dqn == True:
                     max_index = np.argmax(y3[i])
                     y_[i] = clipped_reward + self.discount_factor * y2[i][max_index]
                 else:
                     y_[i] = clipped_reward + self.discount_factor * np.max(y2[i])
 
-        if self.settings['prioritized_replay'] == True:
+        if self.args.prioritized_replay == True:
             delta_value, _, y_a = self.sess.run([self.difference, self.train_step, self.y_a], feed_dict={
                 self.x_in: prestates,
                 self.a_in: self.action_mat,

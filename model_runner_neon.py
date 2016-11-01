@@ -17,11 +17,11 @@ from neon.optimizers import RMSProp, Adam, Schedule
 from neon.optimizers.optimizer import Optimizer, get_param_list
 
 class ModelRunnerNeon():
-    def __init__(self, settings,  max_action_no, batch_dimension):
-        self.settings = settings
-        self.train_batch_size = settings['train_batch_size']
-        self.discount_factor = settings['discount_factor']
-        self.use_gpu_replay_mem = settings['use_gpu_replay_mem']
+    def __init__(self, args,  max_action_no, batch_dimension):
+        self.args = args
+        self.train_batch_size = args.train_batch_size
+        self.discount_factor = args.discount_factor
+        self.use_gpu_replay_mem = args.use_gpu_replay_mem
         
         self.be = gen_backend(backend='gpu',             
                          batch_size=self.train_batch_size)
@@ -50,13 +50,13 @@ class ModelRunnerNeon():
             l.parallelism = 'Disabled'
         self.target_net.initialize(self.input_shape[:-1])
 
-        if self.settings['optimizer'] == 'Adam':        # Adam
-            self.optimizer = Adam(beta_1=settings['rms_decay'],
-                                            beta_2=settings['rms_decay'],
-                                            learning_rate=settings['learning_rate'])
+        if self.args.optimizer == 'Adam':        # Adam
+            self.optimizer = Adam(beta_1=args.rms_decay,
+                                            beta_2=args.rms_decay,
+                                            learning_rate=args.learning_rate)
         else:		# Neon RMSProp
-            self.optimizer = RMSProp(decay_rate=settings['rms_decay'],
-                                            learning_rate=settings['learning_rate'])
+            self.optimizer = RMSProp(decay_rate=args.rms_decay,
+                                            learning_rate=args.learning_rate)
 
         self.max_action_no = max_action_no
         self.running = True
@@ -76,7 +76,7 @@ class ModelRunnerNeon():
             self.history_buffer.fill(0)
 
     def get_initializer(self, input_size):
-        dnnInit = self.settings['dnn_initializer']
+        dnnInit = self.args.dnn_initializer
         if dnnInit == 'xavier':
             initializer = Xavier()
         elif dnnInit == 'fan_in':
@@ -128,7 +128,7 @@ class ModelRunnerNeon():
         return output.T.asnumpyarray()[0]            
 
     def train(self, minibatch, replay_memory, debug):
-        if self.settings['prioritized_replay'] == True:
+        if self.args.prioritized_replay == True:
             prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
         else:
             prestates, actions, rewards, poststates, terminals = minibatch
@@ -137,7 +137,7 @@ class ModelRunnerNeon():
         self.set_input(poststates)
         post_qvalue = self.target_net.fprop(self.input, inference=True).T.asnumpyarray()
         
-        if self.settings['double_dqn'] == True:
+        if self.args.double_dqn == True:
             # Get Q*(s, a) with trainNet
             post_qvalue2 = self.train_net.fprop(self.input, inference=True).T.asnumpyarray()
         
@@ -150,7 +150,7 @@ class ModelRunnerNeon():
             if terminals[i]:
                 label[actions[i], i] = self.clip_reward(rewards[i])
             else:
-                if self.settings['double_dqn'] == True:
+                if self.args.double_dqn == True:
                     max_index = np.argmax(post_qvalue2[i])
                     label[actions[i], i] = self.clip_reward(rewards[i]) + self.discount_factor* post_qvalue[i][max_index]
                 else:
@@ -161,21 +161,19 @@ class ModelRunnerNeon():
     
         delta = self.cost.get_errors(pre_qvalue, self.targets)
         
-        if self.settings['prioritized_replay'] == True:
+        if self.args.prioritized_replay == True:
             delta_value = delta.asnumpyarray()
             for i in range(self.train_batch_size):
                 if debug:
                     print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], delta_value[actions[i], i], weights[i] * delta_value[actions[i], i]) 
                 replay_memory.update_td(heap_indexes[i], abs(delta_value[actions[i], i]))
                 delta_value[actions[i], i] = weights[i] * delta_value[actions[i], i]
-            if self.settings['use_priority_weight'] == True:
+            if self.args.use_priority_weight == True:
                 delta.set(delta_value.copy())
             #delta_value2 = delta.asnumpyarray()
             #pass
           
-        # DJDJ
-        if self.settings['clip_delta'] == True:  
-            self.be.clip(delta, -1.0, 1.0, out = delta)
+        self.be.clip(delta, -1.0, 1.0, out = delta)
                 
         self.train_net.bprop(delta)
         self.optimizer.optimize(self.train_net.layers_to_optimize, epoch=0)
