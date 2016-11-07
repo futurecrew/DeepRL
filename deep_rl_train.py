@@ -15,7 +15,7 @@ from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
 from model_runner_tf_a3c import ModelRunnerTFA3C
 from model_runner_tf_a3c_lstm import ModelRunnerTFA3CLstm
-from model_runner_tf_async import ModelRunnerTFAsync
+from model_runner_tf_async import ModelRunnerTFAsync, load_global_vars
 from model_runner_tf import ModelRunnerTF
 from network_model import ModelA3C, ModelA3CLstm
 from arguments import get_args
@@ -139,6 +139,9 @@ class DeepRLPlayer:
                                          self.args.heap_sort_term)
         else:
             self.replay_memory = uniform_replay_memory
+
+    def set_global_list(self, global_list):
+        self.global_list = global_list
 
     def get_greedy_epsilon(self, mode):
         if mode == 'TEST':
@@ -433,7 +436,8 @@ class DeepRLPlayer:
             while step_no <= self.args.epoch_step:
                 v_pres = []
     
-                lstm_state_value = self.model_runner.get_lstm_state()            
+                if self.args.asynchronousRL_type == 'A3C_LSTM':
+                    lstm_state_value = self.model_runner.get_lstm_state()            
                 for i in range(self.args.train_step):
                     action_index, state_value = self.get_action_state_value('TRAIN')
                     reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
@@ -459,7 +463,8 @@ class DeepRLPlayer:
                 prestates, actions, rewards, _, terminals = self.replay_memory.get_minibatch(data_len)
                 learning_rate = self._anneal_learning_rate(max_global_step_no, global_step_no)
 
-                self.model_runner.set_lstm_state(lstm_state_value)            
+                if self.args.asynchronousRL_type == 'A3C_LSTM':
+                    self.model_runner.set_lstm_state(lstm_state_value)            
                 self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate)
 
                 self.train_step += 1
@@ -488,6 +493,8 @@ class DeepRLPlayer:
                             last_time = current_time
                             last_global_step_no = global_step_no
 
+            self.epoch_done = epoch
+
             print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. learning_rate=%.5f" % \
                   (epoch, float(epoch_total_reward) / episode, 
                    time.time() - epoch_start_time, learning_rate)
@@ -508,8 +515,6 @@ class DeepRLPlayer:
                         self.test(epoch)
                     self.next_test_thread_no = (self.next_test_thread_no + 1) % self.args.multi_thread_no
 
-            self.epoch_done = epoch
-                
         print 'thread %s finished' % self.thread_no
 
     def save(self, file_name):
@@ -569,53 +574,92 @@ if __name__ == '__main__':
     args = get_args()
     save_file = args.retrain_file
 
-    if save_file is not None:        # retrain
-        with open(save_file + '.pickle') as f:
-            player = pickle.load(f)
-            player.train_start = time.strftime('%Y%m%d_%H%M%S')
-            log_file="output/%s_%s.log" % (args.game, player.train_start)            
+    if args.asynchronousRL == True:
+        global global_step_no
+        
+        threadList = []
+        playerList = []
+
+        env = get_env(args, False, False)
+        legal_actions = env.get_actions()
+        
+        # initialize global settings
+        if args.asynchronousRL_type == 'A3C':
+            model = ModelA3C('global', args.network_type, True,  len(legal_actions))
+        elif args.asynchronousRL_type == 'A3C_LSTM':     
+            model = ModelA3CLstm('global', args.network_type, True,  len(legal_actions))
+
+        global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
+        global_sess = global_list[0]
+        global_vars = global_list[1]
+
+        if save_file is not None:        # retrain
+            current_time = time.strftime('%Y%m%d_%H%M%S')
+            log_file="output/%s_%s.log" % (args.game, current_time)            
             util.Logger(log_file)
             print 'Resume trainig: %s' % save_file
-            player.print_env()
-            player.initialize_post()
-            player.model_runner.load(save_file + '.weight')
-            player.train(replay_memory_no = player.replay_memory_no)
-    else:
-        if args.asynchronousRL == True:
-            threadList = []
-            playerList = []
 
-            env = get_env(args, False, False)
-            legal_actions = env.get_actions()
+            for i in range(args.multi_thread_no):        
+                with open(save_file + '.pickle') as f:
+                    player = pickle.load(f)
+                    player.train_start = current_time
+                    player.thread_no = i
+                    if i == 0:
+                        player.print_env()
+                    player.set_global_list(global_list)
+                    player.initialize_post()
+                    playerList.append(player)                    
+
+            model.init_global(global_sess)
             
-            # initialize global model
-            if args.asynchronousRL_type == 'A3C':
-                model = ModelA3C(args.device, 'global', args.network_type, True,  len(legal_actions))
-            elif args.asynchronousRL_type == 'A3C_LSTM':     
-                model = ModelA3CLstm(args.device, 'global', args.network_type, True,  len(legal_actions))
+            global_step_no = playerList[0].epoch_done * 4000000
 
-            global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
-
+            """
+            import tensorflow as tf
+            writer = tf.train.SummaryWriter("/tmp/tf_graph", global_list[0].graph_def)
+            writer.close()
+            print 'tf_graph is written'
+            """
+            
+            # Load global variables
+            load_global_vars(global_sess, global_vars, save_file + '.weight')
+            
+            # copy global variables to local variables
+            for i in range(args.multi_thread_no):        
+                    playerList[i].model_runner.copy_from_global_to_local()
+        else:
             for i in range(args.multi_thread_no):        
                 print 'creating a thread[%s]' % i
                 player = DeepRLPlayer(args, thread_no= i, global_list=global_list)
                 playerList.append(player)
 
-            model.init_global(global_list[0])
-
-            for player in playerList:
-                if args.asynchronousRL_type.startswith('A3C'):
-                    target_func = player.train_async_a3c
-                else:
-                    target_func = player.train
-                t = threading.Thread(target=target_func, args=())
-                t.start()
-                threadList.append(t)
-                
-            for thread in threadList:
-                thread.join()
-            
+            model.init_global(global_sess)
+        
+        for player in playerList:
+            if args.asynchronousRL_type.startswith('A3C'):
+                target_func = player.train_async_a3c
+            else:
+                target_func = player.train
+            t = threading.Thread(target=target_func, args=())
+            t.start()
+            threadList.append(t)
+        
+        for thread in threadList:
+            thread.join()
+    else:
+        if save_file is not None:        # retrain
+            with open(save_file + '.pickle') as f:
+                player = pickle.load(f)
+                player.train_start = time.strftime('%Y%m%d_%H%M%S')
+                log_file="output/%s_%s.log" % (args.game, player.train_start)            
+                util.Logger(log_file)
+                print 'Resume trainig: %s' % save_file
+                player.print_env()
+                player.initialize_post()
+                player.model_runner.load(save_file + '.weight')
+                player.train(replay_memory_no = player.replay_memory_no)
         else:
             player = DeepRLPlayer(args)
             player.train_step = 0
             player.train()
+            

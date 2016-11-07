@@ -22,13 +22,13 @@ class ModelRunnerTFAsync():
         
         if self.play_mode == False:
             self.sess, self.global_vars, self.global_optimizer, self.global_learning_rate = global_list
-            if self.thread_no == 0:
-                self.init_save()
         else:
             self.sess = new_session()
 
         self.init_models()
-        self.saver = tf.train.Saver(max_to_keep=25)
+
+        if self.thread_no == 0:
+            self.saver = tf.train.Saver()
         
     def init_models(self):
         with tf.device(self.args.device):
@@ -145,9 +145,12 @@ class ModelRunnerTFAsync():
         self.saver.restore(self.sess, fileName)
 
     def save(self, fileName):
-        with tf.device(self.args.device):
-            self.sess.run(tf.initialize_variables(self.save_vars))
-            self.sess.run(self.save_sync)
-            self.saver.save(self.sess, fileName)
+        self.saver.save(self.sess, fileName)
+
+    def copy_from_global_to_local(self):
+        self.sess.run(self.sync)
         
-        print 'saved to %s' % fileName
+                        
+def load_global_vars(sess, global_vars, fileName):
+    saver = tf.train.Saver(var_list=global_vars)
+    saver.restore(sess, fileName)
