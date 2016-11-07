@@ -9,10 +9,11 @@ def new_session(graph=None):
     return tf.Session(config=config, graph=graph)
 
 class Model(object):
-    def __init__(self, name, network_type, trainable, max_action_no):
+    def __init__(self, device, name, network_type, trainable, max_action_no):
         self.network_type = network_type
         self.max_action_no = max_action_no
-        self.build_network(name, network_type, trainable, max_action_no)
+        with tf.device(device):
+            self.build_network(name, network_type, trainable, max_action_no)
     
     def make_layer_variables(self, shape, trainable, name_suffix):
         stdv = 1.0 / math.sqrt(np.prod(shape[0:-1]))
@@ -313,40 +314,27 @@ class ModelA3CLstm(Model):
     
             with tf.variable_scope('LSTM'):
                 hidden_size = 256
-                batch_size = 5
                 self.lstm_state = tf.placeholder(tf.float32, (1, hidden_size * 2))
                 self.sequence_length = tf.placeholder(tf.int32)
                 cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size, forget_bias=1.0)
-                h_fc1_split = tf.split(0, batch_size, h_fc1)
-                print h_fc1_split
-                self.output_list, self.lstm_next_state = tf.nn.rnn(cell, h_fc1_split, initial_state=self.lstm_state, sequence_length=self.sequence_length)
-                print('output_list : %s' % self.output_list)
-                outputs = tf.pack(self.output_list)
-                print('outputs : %s' % outputs)
-                outputs2 = tf.squeeze(outputs, [1])
-                print('outputs2 : %s' % outputs2)
-                #outputs3 = tf.reshape(outputs2, tf.pack([self.sequence_length, hidden_size]))
-                self.outputs3 = outputs2[:self.sequence_length[0], :]
-                print('outputs3 : %s'  % self.outputs3)
-                
-                #self.lstm_initial_state = cell.zero_state(batch_size, tf.float32)
-                #self.lstm_state = self.lstm_initial_state
-                #(h_lstm, self.lstm_final_state) = cell(h_fc1, self.lstm_state)
+                h_fc1_reshape = tf.reshape(h_fc1, [-1, 1, 256])
+                print h_fc1_reshape
+                outputs, self.lstm_next_state = tf.nn.dynamic_rnn(cell, h_fc1_reshape, initial_state=self.lstm_state, sequence_length=self.sequence_length, time_major=True)
+                print('outputs : %s' % outputs)        # (5, 1, 256)
+                outputs = tf.squeeze(outputs, [1])      # (5, 256)
+                print('outputs : %s' % outputs) 
                 
                 tvars = tf.trainable_variables()
                 lstm_vars = [tvar for tvar in tvars if tvar.name.startswith(name + '/' + 'LSTM')]
         
             W_fc2, b_fc2 = self.make_layer_variables([256, num_actions], trainable, "fc2")
-    
-            #y = tf.matmul(h_fc1, W_fc2) + b_fc2
-            y = tf.matmul(self.outputs3, W_fc2) + b_fc2
+            y = tf.matmul(outputs, W_fc2) + b_fc2
             print(y)
             
             y_class = tf.nn.softmax(y)
             
             W_fc3, b_fc3 = self.make_layer_variables([256, 1], trainable, "fc3")
-            #v_ = tf.matmul(h_fc1, W_fc3) + b_fc3
-            v_ = tf.matmul(self.outputs3, W_fc3) + b_fc3
+            v_ = tf.matmul(outputs, W_fc3) + b_fc3
             v = tf.reshape(v_, [-1] )
         
         self.x = x_in

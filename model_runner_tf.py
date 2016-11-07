@@ -22,46 +22,48 @@ class ModelRunnerTF(object):
         self.max_action_no = max_action_no
         self.be = None
         self.action_mat = np.zeros((self.train_batch_size, self.max_action_no))
-
+        tf.logging.set_verbosity(tf.logging.WARN)
+        
         self.init_models(self.network_type, max_action_no, learning_rate, rms_decay, rms_epsilon)
 
     def init_models(self, network_type, max_action_no, learning_rate, rms_decay, rms_epsilon):
-        self.sess = self.new_session()
+        with tf.device(self.args.device):
+            self.sess = self.new_session()
+    
+            self.x_in, self.y, self.var_train = self.build_network('policy', network_type, True, max_action_no)
+            self.x_target, self.y_target, self.var_target = self.build_network('target', network_type, False, max_action_no)
 
-        self.x_in, self.y, self.var_train = self.build_network('policy', network_type, True, max_action_no)
-        self.x_target, self.y_target, self.var_target = self.build_network('target', network_type, False, max_action_no)
-
-        # build the variable copy ops
-        self.update_target = []
-        for i in range(0, len(self.var_target)):
-            self.update_target.append(self.var_target[i].assign(self.var_train[i]))
-
-        self.a_in = tf.placeholder(tf.float32, shape=[None, max_action_no])
-        print('a %s' % (self.a_in.get_shape()))
-        self.y_ = tf.placeholder(tf.float32, [None])
-        print('y_ %s' % (self.y_.get_shape()))
-
-        self.y_a = tf.reduce_sum(tf.mul(self.y, self.a_in), reduction_indices=1)
-        print('y_a %s' % (self.y_a.get_shape()))
-
-        optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=rms_decay, epsilon=rms_epsilon)
-        self.difference = tf.abs(self.y_a - self.y_)
-        quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
-        linear_part = self.difference - quadratic_part
-        #self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
-        self.errors = 0.5 * tf.square(self.difference)
-        if self.args.prioritized_replay == True:
-            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
-            self.errors2 = tf.mul(self.errors, self.priority_weight)
-        else:
-            self.errors2 = self.errors
-        self.loss = tf.reduce_sum(tf.clip_by_value(self.errors2, 0.0, 1.0))
-        self.train_step = optimizer.minimize(self.loss)
-        self.saver = tf.train.Saver(max_to_keep=25)
-
-        # Initialize variables
-        self.sess.run(tf.initialize_all_variables())
-        self.sess.run(self.update_target) # is this necessary?
+            # build the variable copy ops
+            self.update_target = []
+            for i in range(0, len(self.var_target)):
+                self.update_target.append(self.var_target[i].assign(self.var_train[i]))
+    
+            self.a_in = tf.placeholder(tf.float32, shape=[None, max_action_no])
+            print('a %s' % (self.a_in.get_shape()))
+            self.y_ = tf.placeholder(tf.float32, [None])
+            print('y_ %s' % (self.y_.get_shape()))
+    
+            self.y_a = tf.reduce_sum(tf.mul(self.y, self.a_in), reduction_indices=1)
+            print('y_a %s' % (self.y_a.get_shape()))
+    
+            optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=rms_decay, epsilon=rms_epsilon)
+            self.difference = tf.abs(self.y_a - self.y_)
+            quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
+            linear_part = self.difference - quadratic_part
+            #self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
+            self.errors = 0.5 * tf.square(self.difference)
+            if self.args.prioritized_replay == True:
+                self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+                self.errors2 = tf.mul(self.errors, self.priority_weight)
+            else:
+                self.errors2 = self.errors
+            self.loss = tf.reduce_sum(tf.clip_by_value(self.errors2, 0.0, 1.0))
+            self.train_step = optimizer.minimize(self.loss)
+            self.saver = tf.train.Saver(max_to_keep=25)
+    
+            # Initialize variables
+            self.sess.run(tf.initialize_all_variables())
+            self.sess.run(self.update_target) # is this necessary?
 
     def clip_reward(self, reward):
             if reward > 0:

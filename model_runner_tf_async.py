@@ -31,66 +31,69 @@ class ModelRunnerTFAsync():
         self.saver = tf.train.Saver(max_to_keep=25)
         
     def init_models(self):
-        self.x_in, self.y, self.var_train = self.build_network('policy', self.network_type, True, self.max_action_no)
-        self.x_target, self.y_target, self.var_target = self.build_network('target', self.network_type, False, self.max_action_no)
-
-        self.a_in = tf.placeholder(tf.float32, shape=[None, self.max_action_no])
-        print('a_in %s' % (self.a_in.get_shape()))
-        self.y_ = tf.placeholder(tf.float32, [None])
-        print('y_ %s' % (self.y_.get_shape()))
-
-        self.y_a = tf.reduce_sum(tf.mul(self.y, self.a_in), reduction_indices=1)
-        print('y_a %s' % (self.y_a.get_shape()))
-
-        self.difference = tf.abs(self.y_a - self.y_)
-        self.errors = 0.5 * tf.square(self.difference)
-        self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
-        loss = tf.reduce_sum(self.errors)
-        
-        self.init_gradients(loss)
-        self.sess.run(tf.initialize_all_variables())
+        with tf.device(self.args.device):
+            self.x_in, self.y, self.var_train = self.build_network('policy', self.network_type, True, self.max_action_no)
+            self.x_target, self.y_target, self.var_target = self.build_network('target', self.network_type, False, self.max_action_no)
+    
+            self.a_in = tf.placeholder(tf.float32, shape=[None, self.max_action_no])
+            print('a_in %s' % (self.a_in.get_shape()))
+            self.y_ = tf.placeholder(tf.float32, [None])
+            print('y_ %s' % (self.y_.get_shape()))
+    
+            self.y_a = tf.reduce_sum(tf.mul(self.y, self.a_in), reduction_indices=1)
+            print('y_a %s' % (self.y_a.get_shape()))
+    
+            self.difference = tf.abs(self.y_a - self.y_)
+            self.errors = 0.5 * tf.square(self.difference)
+            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
+            loss = tf.reduce_sum(self.errors)
+            
+            self.init_gradients(loss)
+            self.sess.run(tf.initialize_all_variables())
 
     def init_gradients(self, loss, var_train):
         if self.play_mode:
             return
         
-        var_refs = [v.ref() for v in var_train]
-        train_gradients = tf.gradients(
-            loss, var_refs,
-            gate_gradients=False,
-            aggregation_method=None,
-            colocate_gradients_with_ops=False)
-
-        acc_gradient_list = []
-        train_step_list = []
-        new_grad_vars = []
-        self.grad_list = []
-        var_list = []
-        for grad, var in zip(train_gradients, self.global_vars):
-            acc_gradient = tf.Variable(tf.zeros(grad.get_shape()), trainable=False)
-            acc_gradient_list.append(acc_gradient)
-            train_step_list.append(acc_gradient.assign_add(grad))
-            new_grad_vars.append((tf.convert_to_tensor(acc_gradient, dtype=tf.float32), var))
-            self.grad_list.append(acc_gradient)
-            var_list.append(var)
-        
-        self.train_step = tf.group(*train_step_list)                
-        
-        self.reset_acc_gradients = tf.initialize_variables(acc_gradient_list)        
-        self.apply_grads = self.global_optimizer.apply_gradients(new_grad_vars)
-
-        sync_list = []
-        for i in range(0, len(self.global_vars)):
-            sync_list.append(var_train[i].assign(self.global_vars[i]))
-        self.sync = tf.group(*sync_list)
+        with tf.device(self.args.device):
+            var_refs = [v.ref() for v in var_train]
+            train_gradients = tf.gradients(
+                loss, var_refs,
+                gate_gradients=False,
+                aggregation_method=None,
+                colocate_gradients_with_ops=False)
+    
+            acc_gradient_list = []
+            train_step_list = []
+            new_grad_vars = []
+            self.grad_list = []
+            var_list = []
+            for grad, var in zip(train_gradients, self.global_vars):
+                acc_gradient = tf.Variable(tf.zeros(grad.get_shape()), trainable=False)
+                acc_gradient_list.append(acc_gradient)
+                train_step_list.append(acc_gradient.assign_add(grad))
+                new_grad_vars.append((tf.convert_to_tensor(acc_gradient, dtype=tf.float32), var))
+                self.grad_list.append(acc_gradient)
+                var_list.append(var)
+            
+            self.train_step = tf.group(*train_step_list)                
+            
+            self.reset_acc_gradients = tf.initialize_variables(acc_gradient_list)        
+            self.apply_grads = self.global_optimizer.apply_gradients(new_grad_vars)
+    
+            sync_list = []
+            for i in range(0, len(self.global_vars)):
+                sync_list.append(var_train[i].assign(self.global_vars[i]))
+            self.sync = tf.group(*sync_list)
     
     def init_save(self):
         save_model = self.new_model('save')
         self.save_vars = save_model.get_vars()
-        sync_list = []
-        for i in range(0, len(self.global_vars)):
-            sync_list.append(self.save_vars[i].assign(self.global_vars[i]))
-        self.save_sync = tf.group(*sync_list)
+        with tf.device(self.args.device):
+            sync_list = []
+            for i in range(0, len(self.global_vars)):
+                sync_list.append(self.save_vars[i].assign(self.global_vars[i]))
+            self.save_sync = tf.group(*sync_list)
         
     def train(self, minibatch, replay_memory, debug):
         if self.args.prioritized_replay == True:
@@ -142,8 +145,9 @@ class ModelRunnerTFAsync():
         self.saver.restore(self.sess, fileName)
 
     def save(self, fileName):
-        self.sess.run(tf.initialize_variables(self.save_vars))
-        self.sess.run(self.save_sync)
-        self.saver.save(self.sess, fileName)
+        with tf.device(self.args.device):
+            self.sess.run(tf.initialize_variables(self.save_vars))
+            self.sess.run(self.save_sync)
+            self.saver.save(self.sess, fileName)
         
         print 'saved to %s' % fileName
