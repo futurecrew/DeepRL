@@ -1,64 +1,43 @@
 import argparse
 
+def get_game_name(rom):
+    if '/' in rom:
+        game = rom.split('/')[-1]
+    else:
+        game = rom
+    if '.' in game:
+        game = game.split('.')[0]
+    return game
+
 def get_args():
     parser = argparse.ArgumentParser()    
     
-    #parser.add_argument('--game', type=str, default='breakout', help='game name')
-    parser.add_argument('--game', type=str, default='space_invaders', help='game name')
-    #parser.add_argument('--game', type=str, default='enduro', help='game name')
-    #parser.add_argument('--game', type=str, default='kung_fu_master', help='game name')
-    #parser.add_argument('--game', type=str, default='krull', help='game name')
-    #parser.add_argument('--game', type=str, default='hero', help='game name')
-    #parser.add_argument('--game', type=str, default='qbert', help='game name')       # Something wrong with reward?
-    #parser.add_argument('--game', type=str, default='seaquest', help='game name')
-    #parser.add_argument('--game', type=str, default='pong', help='game name')
-    #parser.add_argument('--game', type=str, default='beam_rider', help='game name')
-    
-    # DJDJ
+    parser.add_argument('rom', type=str, help='ALE rom file')    
     parser.add_argument('--asynchronousRL', type=bool, default=True, help='')
-    #parser.add_argument('--asynchronousRL', type=bool, default=False, help='')
-    
-    parser.add_argument('--asynchronousRL-type', type=str, default='A3C_LSTM', help='')
-    #parser.add_argument('--asynchronousRL-type', type=str, default='A3C', help='')
-    #parser.add_argument('--asynchronousRL-type', type=str, default='1Q', help='')
-    
-    #parser.add_argument('--network-type', type=str, default='nature', help='network model nature or nips')
-    parser.add_argument('--network-type', type=str, default='nips', help='') 
+    parser.add_argument('--asynchronousRL-type', type=str, default='A3C_LSTM', help='A3C_LSTM, A3C, 1Q')
+    parser.add_argument('--multi-thread-no', type=int, default=1, help='Number of multiple threads for Asynchronous RL')
+    parser.add_argument('--network-type', type=str, default='nips', help='network model nature or nips') 
     parser.add_argument('--dqn-type', type=str, default='dqn', help='dqn, double-dqn, prioritized-rank, prioritized-proportion') 
-
     parser.add_argument('--retrain-file', type=str, default=None, help='trained file to resume training') 
     parser.add_argument('--replay-file', type=str, default=None, help='trained file to replay') 
-
-    # DJDJ
     parser.add_argument('--device', type=str, default='', help='(gpu, cpu)')
     parser.add_argument('--env', type=str, default='ale', help='environment(ale, vizdoom)')
     
-    #parser.add_argument('--device', type=str, default='', help='(/gpu:0, /cpu:0)')
-    #parser.add_argument('--env', type=str, default='vizdoom', help='environment(ale, vizdoom)')
-    
     args = parser.parse_args()
-    args.rom ='/media/big/download/roms/%s.bin' % args.game
     
+    args.game = get_game_name(args.rom)
     args.screen_width = 84    # input screen width
     args.screen_height = 84    # input screen height
     args.screen_history = 4    # input screen history
     args.frame_repeat = 4    # how many frames to repeat in ale for one predicted action
-    
-    # DJDJ
     args.show_screen = False    # whether to show ale display
-    #args.show_screen = True    # whether to show ale display
-    
     args.use_ale_frame_skip = False    # whether to use ale frame_skip feature
     args.discount_factor = 0.99    # RL discount factor
     args.test_step = 125000    # test for this number of steps    
     args.crop_image = False         # Crop input image or zoom image
-    
-    # DJDJ
     args.run_test = True    # Whether to run test
-    #args.run_test = False    # Whether to run test
-     
-    args.backend = 'TF'    # Deep learning library backend (TF, NEON)
-    
+
+    args.backend = 'TF'    # Deep learning library backend (TF, NEON)    
     if args.backend == 'TF':
         args.screen_order = 'hws'   # dimension order in replay memory (height, width, screen)
     elif args.backend == 'NEON':
@@ -78,11 +57,7 @@ def get_args():
         args.rms_epsilon = 0.1                 # rms epsilon
         args.choose_max_action = False
         args.lost_life_game_over = False    # whether to regard lost life as game over
-        args.lost_life_terminal = True    # whether to regard lost life as terminal state
-        
-        # DJDJ
-        args.multi_thread_no = 8              # Number of multiple threads for Asynchronous RL
-        
+        args.lost_life_terminal = True    # whether to regard lost life as terminal state        
         args.minibatch_random = False       # whether to use random indexing or sequential indexing for minibatch
         args.save_step = 4000000            # save result every this training step
         args.prioritized_replay = False
@@ -100,7 +75,6 @@ def get_args():
         args.choose_max_action = True
         args.lost_life_game_over = True    # whether to regard lost life as game over
         args.lost_life_terminal = True    # whether to regard lost life as terminal state
-        args.multi_thread_no = 0
         args.minibatch_random = True
         args.train_min_epsilon = 0.1    # minimum greedy epsilon value for exloration
         args.update_step = 10000    # copy train network into target network every this train step

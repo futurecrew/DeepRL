@@ -474,7 +474,6 @@ class DeepRLPlayer:
                 
                 if game_over:
                     if episode % 500 == 0:
-                    #if episode % 1 == 0:
                         print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),

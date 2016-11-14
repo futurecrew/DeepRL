@@ -28,7 +28,7 @@ class VizDoomEnv():
         self.game.set_screen_format(ScreenFormat.RGB24)
         
         # Enables depth buffer.
-        self.game.set_depth_buffer_enabled(True)
+        #self.game.set_depth_buffer_enabled(True)
         
         # Enables labeling of in game objects labeling.
         self.game.set_labels_buffer_enabled(True)
@@ -37,7 +37,7 @@ class VizDoomEnv():
         self.game.set_automap_buffer_enabled(True)
         
         # Sets other rendering options
-        self.game.set_render_hud(True)
+        self.game.set_render_hud(False)
         self.game.set_render_minimal_hud(False) # If hud is enabled
         self.game.set_render_crosshair(False)
         self.game.set_render_weapon(True)
@@ -60,7 +60,7 @@ class VizDoomEnv():
         self.game.set_episode_start_time(10)
         
         # Turns on the sound. (turned off by default)
-        self.game.set_sound_enabled(True)
+        #self.game.set_sound_enabled(True)
         
         # Sets the livin reward (for each move) to -1
         self.game.set_living_reward(-1)
@@ -76,12 +76,10 @@ class VizDoomEnv():
         # MOVE_LEFT, MOVE_RIGHT, ATTACK
         # 5 more combinations are naturally possible but only 3 are included for transparency when watching.
         
-        # Run this many episodes
-        episodes = 10
         self.actions = self.get_actions()
         print 'actions: %s' % self.actions
         
-    def get_actions(self):
+    def get_actions(self, rom=None):
         actions = [[False, False, False], [True, False, False], [False, True, False], [False, False, True]]
         return actions
         
@@ -89,13 +87,13 @@ class VizDoomEnv():
         self.game.new_episode()
         
     def lives(self):
-        return 1 if self.game.is_player_dead() == 1 else 0
+        return 1 if self.game.is_player_dead() == False else 0
     
     def getScreenRGB(self):
         return self.game.get_state().screen_buffer
     
     def getScreenGrayscale(self):
-        rgb = self.game.get_state().screen_buffer
+        rgb = self.getScreenRGB()
         if rgb is not None:
             return np.dot(rgb, np.array([.299, .587, .114])).astype(np.uint8)
         else:
