@@ -50,14 +50,7 @@ def get_args():
     
     args.use_ale_frame_skip = False    # whether to use ale frame_skip feature
     args.discount_factor = 0.99    # RL discount factor
-    args.test_step = 125000    # test for this number of steps
-    
-    # DJDJ
-    args.lost_life_game_over = False    # whether to regard lost life as game over
-    #args.lost_life_game_over = True    # whether to regard lost life as game over
-
-    args.lost_life_terminal = True    # whether to regard lost life as terminal state
-    
+    args.test_step = 125000    # test for this number of steps    
     args.crop_image = False         # Crop input image or zoom image
     
     # DJDJ
@@ -84,6 +77,8 @@ def get_args():
         args.rms_decay = 0.99                 # rms decay
         args.rms_epsilon = 0.1                 # rms epsilon
         args.choose_max_action = False
+        args.lost_life_game_over = False    # whether to regard lost life as game over
+        args.lost_life_terminal = True    # whether to regard lost life as terminal state
         
         # DJDJ
         args.multi_thread_no = 8              # Number of multiple threads for Asynchronous RL
@@ -103,6 +98,8 @@ def get_args():
         args.rms_decay = 0.95                
         args.rms_epsilon = 0.01                 
         args.choose_max_action = True
+        args.lost_life_game_over = True    # whether to regard lost life as game over
+        args.lost_life_terminal = True    # whether to regard lost life as terminal state
         args.multi_thread_no = 0
         args.minibatch_random = True
         args.train_min_epsilon = 0.1    # minimum greedy epsilon value for exloration
