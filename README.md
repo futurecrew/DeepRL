@@ -16,10 +16,10 @@ This is to implement deep reinforcement learning algorithms including following 
   
 ## How to train
 ```
-python deep_rl_train.py path_to_rom_file multi_thread_no
+python deep_rl_train.py [path_to_rom_file] --multi-thread-no 8
 ```
 
 ## How to run
 ```
-python play.py path_to_rom_file path_to_snapshot_file
+python play.py [path_to_rom_file] --replay-file [path_to_snapshot_file]
 ```
