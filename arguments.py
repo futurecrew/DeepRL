@@ -4,9 +4,9 @@ def get_args():
     parser = argparse.ArgumentParser()    
     
     #parser.add_argument('--game', type=str, default='breakout', help='game name')
-    #parser.add_argument('--game', type=str, default='space_invaders', help='game name')
+    parser.add_argument('--game', type=str, default='space_invaders', help='game name')
     #parser.add_argument('--game', type=str, default='enduro', help='game name')
-    parser.add_argument('--game', type=str, default='kung_fu_master', help='game name')
+    #parser.add_argument('--game', type=str, default='kung_fu_master', help='game name')
     #parser.add_argument('--game', type=str, default='krull', help='game name')
     #parser.add_argument('--game', type=str, default='hero', help='game name')
     #parser.add_argument('--game', type=str, default='qbert', help='game name')       # Something wrong with reward?
@@ -14,7 +14,10 @@ def get_args():
     #parser.add_argument('--game', type=str, default='pong', help='game name')
     #parser.add_argument('--game', type=str, default='beam_rider', help='game name')
     
+    # DJDJ
     parser.add_argument('--asynchronousRL', type=bool, default=True, help='')
+    #parser.add_argument('--asynchronousRL', type=bool, default=False, help='')
+    
     parser.add_argument('--asynchronousRL-type', type=str, default='A3C_LSTM', help='')
     #parser.add_argument('--asynchronousRL-type', type=str, default='A3C', help='')
     #parser.add_argument('--asynchronousRL-type', type=str, default='1Q', help='')
@@ -27,11 +30,11 @@ def get_args():
     parser.add_argument('--replay-file', type=str, default=None, help='trained file to replay') 
 
     # DJDJ
-    #parser.add_argument('--device', type=str, default='gpu', help='(gpu, cpu)')
-    #parser.add_argument('--env', type=str, default='ale', help='environment(ale, vizdoom)')
+    parser.add_argument('--device', type=str, default='', help='(gpu, cpu)')
+    parser.add_argument('--env', type=str, default='ale', help='environment(ale, vizdoom)')
     
-    parser.add_argument('--device', type=str, default='', help='(/gpu:0, /cpu:0)')
-    parser.add_argument('--env', type=str, default='vizdoom', help='environment(ale, vizdoom)')
+    #parser.add_argument('--device', type=str, default='', help='(/gpu:0, /cpu:0)')
+    #parser.add_argument('--env', type=str, default='vizdoom', help='environment(ale, vizdoom)')
     
     args = parser.parse_args()
     args.rom ='/media/big/download/roms/%s.bin' % args.game
@@ -50,16 +53,16 @@ def get_args():
     args.test_step = 125000    # test for this number of steps
     
     # DJDJ
-    #args.lost_life_game_over = False    # whether to regard lost life as game over
-    #args.lost_life_terminal = False    # whether to regard lost life as terminal state
-    args.lost_life_game_over = True    # whether to regard lost life as game over
+    args.lost_life_game_over = False    # whether to regard lost life as game over
+    #args.lost_life_game_over = True    # whether to regard lost life as game over
+
     args.lost_life_terminal = True    # whether to regard lost life as terminal state
     
     args.crop_image = False         # Crop input image or zoom image
     
     # DJDJ
-    #args.run_test = True    # Whether to run test
-    args.run_test = False    # Whether to run test
+    args.run_test = True    # Whether to run test
+    #args.run_test = False    # Whether to run test
      
     args.backend = 'TF'    # Deep learning library backend (TF, NEON)
     
@@ -83,7 +86,7 @@ def get_args():
         args.choose_max_action = False
         
         # DJDJ
-        args.multi_thread_no = 1              # Number of multiple threads for Asynchronous RL
+        args.multi_thread_no = 8              # Number of multiple threads for Asynchronous RL
         
         args.minibatch_random = False       # whether to use random indexing or sequential indexing for minibatch
         args.save_step = 4000000            # save result every this training step

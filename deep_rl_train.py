@@ -70,6 +70,9 @@ class DeepRLPlayer:
             display_screen = True
         else:
             display_screen = False
+            
+        # DJDJ
+        #display_screen = False
 
         self.env = get_env(self.args, True, display_screen)
         self.legal_actions = self.env.get_actions()
@@ -470,8 +473,8 @@ class DeepRLPlayer:
                 self.train_step += 1
                 
                 if game_over:
-                    #if episode % 200 == 0:
-                    if episode % 1 == 0:
+                    if episode % 500 == 0:
+                    #if episode % 1 == 0:
                         print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
@@ -581,13 +584,13 @@ if __name__ == '__main__':
         playerList = []
 
         env = get_env(args, False, False)
-        legal_actions = env.get_actions()
+        legal_actions = env.get_actions(args.rom)
         
         # initialize global settings
         if args.asynchronousRL_type == 'A3C':
-            model = ModelA3C('global', args.network_type, True,  len(legal_actions))
+            model = ModelA3C(args.device, 'global', args.network_type, True,  len(legal_actions))
         elif args.asynchronousRL_type == 'A3C_LSTM':     
-            model = ModelA3CLstm('global', args.network_type, True,  len(legal_actions))
+            model = ModelA3CLstm(args.device, 'global', args.network_type, True,  len(legal_actions))
 
         global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
         global_sess = global_list[0]

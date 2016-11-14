@@ -7,6 +7,7 @@ import threading
 import traceback
 import pickle
 import tensorflow as tf
+from network_model import Model, new_session
 
 class ModelRunnerTF(object):
     def __init__(self, args,  max_action_no, batch_dimension):
@@ -24,14 +25,16 @@ class ModelRunnerTF(object):
         self.action_mat = np.zeros((self.train_batch_size, self.max_action_no))
         tf.logging.set_verbosity(tf.logging.WARN)
         
+        self.sess = new_session()
         self.init_models(self.network_type, max_action_no, learning_rate, rms_decay, rms_epsilon)
 
-    def init_models(self, network_type, max_action_no, learning_rate, rms_decay, rms_epsilon):
+    def init_models(self, network_type, max_action_no, learning_rate, rms_decay, rms_epsilon):        
         with tf.device(self.args.device):
-            self.sess = self.new_session()
+            model_policy = Model(self.args.device, "policy", network_type, True, max_action_no)
+            model_target = Model(self.args.device, "target", network_type, False, max_action_no)
     
-            self.x_in, self.y, self.var_train = self.build_network('policy', network_type, True, max_action_no)
-            self.x_target, self.y_target, self.var_target = self.build_network('target', network_type, False, max_action_no)
+            self.x_in, self.y, self.var_train = model_policy.x, model_policy.y, model_policy.variables
+            self.x_target, self.y_target, self.var_target = model_target.x, model_target.y, model_target.variables
 
             # build the variable copy ops
             self.update_target = []
