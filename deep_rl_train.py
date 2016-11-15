@@ -66,7 +66,7 @@ class DeepRLPlayer:
         
     def initialize_post(self):
         """ initialization that should be run on __init__() or after deserialization """
-        if (self.args.show_screen and self.thread_no == 0) or self.play_file is not None:
+        if self.args.show_screen and self.thread_no == 0:
             display_screen = True
         else:
             display_screen = False
@@ -279,11 +279,7 @@ class DeepRLPlayer:
                             game_over = True
                         break
                 new_state = np.maximum(prev_state, self.current_state)
-                
-            try:
-                resized = cv2.resize(new_state, (self.args.screen_height, self.args.screen_width))
-            except:
-                pass
+            resized = cv2.resize(new_state, (self.args.screen_height, self.args.screen_width))
             return reward, resized, terminal, game_over
     
     def generate_replay_memory(self, count):
@@ -467,8 +463,9 @@ class DeepRLPlayer:
                 learning_rate = self._anneal_learning_rate(max_global_step_no, global_step_no)
 
                 if self.args.asynchronousRL_type == 'A3C_LSTM':
-                    self.model_runner.set_lstm_state(lstm_state_value)            
-                self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate)
+                    self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate, lstm_state_value)
+                else:
+                    self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate)
 
                 self.train_step += 1
                 
@@ -577,8 +574,6 @@ if __name__ == '__main__':
     save_file = args.retrain_file
 
     if args.asynchronousRL == True:
-        global global_step_no
-        
         threadList = []
         playerList = []
 
@@ -628,7 +623,7 @@ if __name__ == '__main__':
             
             # copy global variables to local variables
             for i in range(args.multi_thread_no):        
-                    playerList[i].model_runner.copy_from_global_to_local()
+                playerList[i].model_runner.copy_from_global_to_local()
         else:
             for i in range(args.multi_thread_no):        
                 print 'creating a thread[%s]' % i

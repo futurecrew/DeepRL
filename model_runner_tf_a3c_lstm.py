@@ -20,7 +20,7 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
             self.y_class = self.model.y_class
             self.v = self.model.v
             
-            self.lstm_state = self.model.lstm_state
+            self.lstm_init_state = self.model.lstm_init_state
             self.lstm_next_state = self.model.lstm_next_state
             self.sequence_length = self.model.sequence_length
             self.lstm_hidden_size = 256
@@ -78,7 +78,8 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
     def predict_action_state(self, state):
         y_class, v, self.lstm_state_value = self.sess.run([self.y_class, self.v, self.lstm_next_state], feed_dict={
                         self.x_in: state,
-                        self.lstm_state: self.lstm_state_value,
+                        self.lstm_init_state.c : self.lstm_state_value[0],
+                        self.lstm_init_state.h : self.lstm_state_value[1],
                         self.sequence_length : [1],
                         })
         return y_class[0], v[0]
@@ -88,7 +89,8 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
         # because this function does not process to a new screen frame
         v, _ = self.sess.run([self.v, self.lstm_next_state], feed_dict={
                         self.x_in: state,
-                        self.lstm_state: self.lstm_state_value,
+                        self.lstm_init_state.c : self.lstm_state_value[0],
+                        self.lstm_init_state.h : self.lstm_state_value[1],
                         self.sequence_length : [1],
                         })
         return v[0]
@@ -96,22 +98,25 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
     def predict(self, state):
         y_class, self.lstm_state_value = self.sess.run([self.y_class, self.lstm_next_state], feed_dict={
                         self.x_in: state,
-                        self.lstm_state: self.lstm_state_value,
+                        self.lstm_init_state.c : self.lstm_state_value[0],
+                        self.lstm_init_state.h : self.lstm_state_value[1],
                         self.sequence_length : [1],
                         })
         return y_class[0]
 
     def reset_lstm_state(self):
-        self.lstm_state_value = np.zeros((1, self.lstm_hidden_size * 2))
+        self.lstm_state_value = self.sess.run(self.lstm_init_state)
 
     def get_lstm_state(self):
-        return self.lstm_state_value.copy()
+        return self.lstm_state_value
 
-    def set_lstm_state(self, lstm_state_value):
-        self.lstm_state_value = lstm_state_value
+    def set_lstm_state(self, lstm_state_value_c, lstm_state_value_h):
+        self.lstm_state_value[0] = lstm_state_value_c
+        self.lstm_state_value[1] = lstm_state_value_h
 
-    def train(self, prestates, v_pres, actions, rewards, terminals, v_post, learning_rate):
+    def train(self, prestates, v_pres, actions, rewards, terminals, v_post, learning_rate, lstm_state_value):
         data_len = len(actions)
+        self.lstm_state_value = lstm_state_value
         
         action_mat = np.zeros((data_len, self.max_action_no), dtype=np.uint8)
         v_in = np.zeros(data_len)
@@ -136,7 +141,8 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
             self.a_in: action_mat,
             self.v_in: v_in,
             self.td_in: td_in,
-            self.lstm_state : self.lstm_state_value,
+            self.lstm_init_state.c : self.lstm_state_value[0],
+            self.lstm_init_state.h : self.lstm_state_value[1],
             self.sequence_length : [data_len],
         })
         

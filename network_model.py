@@ -314,12 +314,12 @@ class ModelA3CLstm(Model):
     
             with tf.variable_scope('LSTM'):
                 hidden_size = 256
-                self.lstm_state = tf.placeholder(tf.float32, (1, hidden_size * 2))
                 self.sequence_length = tf.placeholder(tf.int32)
-                cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size, forget_bias=1.0)
+                lstm_cell = tf.nn.rnn_cell.BasicLSTMCell(hidden_size, forget_bias=1.0, state_is_tuple=True)
+                self.lstm_init_state = lstm_cell.zero_state(1, tf.float32)                
                 h_fc1_reshape = tf.reshape(h_fc1, [-1, 1, 256])
                 print h_fc1_reshape
-                outputs, self.lstm_next_state = tf.nn.dynamic_rnn(cell, h_fc1_reshape, initial_state=self.lstm_state, sequence_length=self.sequence_length, time_major=True)
+                outputs, self.lstm_next_state = tf.nn.dynamic_rnn(lstm_cell, h_fc1_reshape, initial_state=self.lstm_init_state, sequence_length=self.sequence_length, time_major=True)
                 print('outputs : %s' % outputs)        # (5, 1, 256)
                 outputs = tf.squeeze(outputs, [1])      # (5, 256)
                 print('outputs : %s' % outputs) 

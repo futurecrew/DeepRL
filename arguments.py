@@ -13,7 +13,7 @@ def get_args():
     parser = argparse.ArgumentParser()    
     
     parser.add_argument('rom', type=str, help='ALE rom file')    
-    parser.add_argument('--asynchronousRL', type=bool, default=True, help='')
+    parser.add_argument('--asynchronousRL', action='store_true', help='whether to use asynchronous learning')
     parser.add_argument('--asynchronousRL-type', type=str, default='A3C_LSTM', help='A3C_LSTM, A3C, 1Q')
     parser.add_argument('--multi-thread-no', type=int, default=1, help='Number of multiple threads for Asynchronous RL')
     parser.add_argument('--network-type', type=str, default='nips', help='network model nature or nips') 
@@ -22,6 +22,9 @@ def get_args():
     parser.add_argument('--replay-file', type=str, default=None, help='trained file to replay') 
     parser.add_argument('--device', type=str, default='', help='(gpu, cpu)')
     parser.add_argument('--env', type=str, default='ale', help='environment(ale, vizdoom)')
+    parser.add_argument('--show-screen', action='store_true', help='whether to show display or not')
+    parser.set_defaults(asynchronousRL=True)
+    parser.set_defaults(show_screen=False)
     
     args = parser.parse_args()
     
@@ -30,7 +33,6 @@ def get_args():
     args.screen_height = 84    # input screen height
     args.screen_history = 4    # input screen history
     args.frame_repeat = 4    # how many frames to repeat in ale for one predicted action
-    args.show_screen = False    # whether to show ale display
     args.use_ale_frame_skip = False    # whether to use ale frame_skip feature
     args.discount_factor = 0.99    # RL discount factor
     args.test_step = 125000    # test for this number of steps    
