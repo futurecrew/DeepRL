@@ -12,6 +12,10 @@ This is to implement deep reinforcement learning algorithms including following 
 ## Test scores
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="500">
 
+In my PC (i7 CPU, Titan-X Maxwell),
+A3C FF trains 4.00M global steps/hour
+A3C LSTM trains 1.84M global steps/hour
+
 ## Requirements
   - Python-2.7
   - Arcade-Learning-Environment
