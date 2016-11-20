@@ -30,8 +30,8 @@ class ModelRunnerTF(object):
 
     def init_models(self, network_type, max_action_no, learning_rate, rms_decay, rms_epsilon):        
         with tf.device(self.args.device):
-            model_policy = Model(self.args.device, "policy", network_type, True, max_action_no)
-            model_target = Model(self.args.device, "target", network_type, False, max_action_no)
+            model_policy = Model(self.args.device, "policy", network_type, self.args.screen_height, self.args.screen_width, True, max_action_no)
+            model_target = Model(self.args.device, "target", network_type, self.args.screen_height, self.args.screen_width, False, max_action_no)
     
             self.x_in, self.y, self.var_train = model_policy.x, model_policy.y, model_policy.variables
             self.x_target, self.y_target, self.var_target = model_target.x, model_target.y, model_target.variables
@@ -53,14 +53,14 @@ class ModelRunnerTF(object):
             self.difference = tf.abs(self.y_a - self.y_)
             quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
             linear_part = self.difference - quadratic_part
-            #self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
-            self.errors = 0.5 * tf.square(self.difference)
+            self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
+                    
             if self.args.prioritized_replay == True:
                 self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
                 self.errors2 = tf.mul(self.errors, self.priority_weight)
             else:
                 self.errors2 = self.errors
-            self.loss = tf.reduce_sum(tf.clip_by_value(self.errors2, 0.0, 1.0))
+            self.loss = tf.reduce_sum(self.errors2)
             self.train_step = optimizer.minimize(self.loss)
             self.saver = tf.train.Saver(max_to_keep=25)
     

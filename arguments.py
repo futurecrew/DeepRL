@@ -13,8 +13,7 @@ def get_args():
     parser = argparse.ArgumentParser()    
     
     parser.add_argument('rom', type=str, help='ALE rom file')    
-    parser.add_argument('--asynchronousRL', action='store_true', help='whether to use asynchronous learning')
-    parser.add_argument('--asynchronousRL-type', type=str, default='A3C_LSTM', help='A3C_LSTM, A3C, 1Q')
+    parser.add_argument('--asynchronousRL', type=str, default=None, help='A3C_LSTM, A3C, 1Q, None')
     parser.add_argument('--multi-thread-no', type=int, default=1, help='Number of multiple threads for Asynchronous RL')
     parser.add_argument('--network-type', type=str, default='nips', help='network model nature or nips') 
     parser.add_argument('--dqn-type', type=str, default='dqn', help='dqn, double-dqn, prioritized-rank, prioritized-proportion') 
@@ -23,7 +22,6 @@ def get_args():
     parser.add_argument('--device', type=str, default='', help='(gpu, cpu)')
     parser.add_argument('--env', type=str, default='ale', help='environment(ale, vizdoom)')
     parser.add_argument('--show-screen', action='store_true', help='whether to show display or not')
-    parser.set_defaults(asynchronousRL=True)
     parser.set_defaults(show_screen=False)
     
     args = parser.parse_args()
@@ -35,7 +33,8 @@ def get_args():
     args.frame_repeat = 4    # how many frames to repeat in ale for one predicted action
     args.use_ale_frame_skip = False    # whether to use ale frame_skip feature
     args.discount_factor = 0.99    # RL discount factor
-    args.test_step = 125000    # test for this number of steps    
+    args.test_step = 125000    # test for this number of steps
+    args.use_random_action_on_reset = True
     args.crop_image = False         # Crop input image or zoom image
     args.run_test = True    # Whether to run test
 
@@ -47,7 +46,7 @@ def get_args():
         args.dnn_initializer = 'fan_in'    # 
         args.use_gpu_replay_mem = False       # Whether to store replay memory in gpu or not to speed up leraning        
     
-    if args.asynchronousRL == True:
+    if args.asynchronousRL != None:
         args.train_batch_size = 5
         args.max_replay_memory = 30
         args.max_epoch = 20
@@ -64,6 +63,14 @@ def get_args():
         args.save_step = 4000000            # save result every this training step
         args.prioritized_replay = False
         args.max_global_step_no = args.epoch_step * args.max_epoch * args.multi_thread_no
+
+        # DJDJ
+        if args.env == 'vizdoom':
+            args.screen_width = 45    # input screen width
+            args.screen_height = 30    # input screen height
+            args.learning_rate = 0.00025                 # RL learning rate
+            args.frame_repeat = 12
+            args.use_random_action_on_reset = False
     else:
         args.train_batch_size = 32
         args.max_replay_memory = 1000000
@@ -91,7 +98,8 @@ def get_args():
             args.double_dqn = True    # 
             args.train_min_epsilon = 0.01    # 
             args.test_epsilon = 0.001    # 
-            args.update_step = 30000    # 
+            args.update_step = 30000    #
+            args.prioritized_replay = False 
         elif args.dqn_type == 'prioritized_rank':    # Prioritized experience replay params for RANK
             args.prioritized_replay = True    # 
             args.learning_rate = 0.00025 / 4    # 

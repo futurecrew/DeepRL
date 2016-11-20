@@ -8,8 +8,10 @@ import tensorflow as tf
 from network_model import new_session
 
 class ModelRunnerTFAsync():
-    def __init__(self, global_list, args,  max_action_no, thread_no):
+    def __init__(self, global_list, args, max_action_no, thread_no):
         self.args = args
+        self.screen_height = args.screen_height 
+        self.screen_width = args.screen_width
         self.max_action_no = max_action_no
         self.discount_factor = args.discount_factor
         self.network_type = args.network_type

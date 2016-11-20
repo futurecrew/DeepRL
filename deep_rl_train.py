@@ -70,17 +70,14 @@ class DeepRLPlayer:
             display_screen = True
         else:
             display_screen = False
-            
-        # DJDJ
-        #display_screen = False
 
         self.env = get_env(self.args, True, display_screen)
         self.legal_actions = self.env.get_actions()
         self.initialize_model()
         self.initialize_replay_memory()
         
-        #DebugInput(self).start()
-        self.debug = False
+        if self.thread_no == 0:
+            DebugInput(self).start()
         
     def initialize_model(self):
         if self.args.backend == 'NEON':
@@ -91,28 +88,30 @@ class DeepRLPlayer:
                                     batch_dimension = self.batch_dimension
                                     )
         elif self.args.backend == 'TF':
-            if self.args.asynchronousRL == True:
-                if self.args.asynchronousRL_type == 'A3C':            
-                    self.model_runner = ModelRunnerTFA3C(
-                                    self.global_list,
-                                    self.args, 
-                                    max_action_no = len(self.legal_actions),
-                                    thread_no = self.thread_no
-                                    )
-                elif self.args.asynchronousRL_type == 'A3C_LSTM':            
-                    self.model_runner = ModelRunnerTFA3CLstm(
-                                    self.global_list,
-                                    self.args, 
-                                    max_action_no = len(self.legal_actions),
-                                    thread_no = self.thread_no
-                                    )
-                else:
-                    self.model_runner = ModelRunnerTFAsync(
-                                    self.global_list,
-                                    self.args, 
-                                    max_action_no = len(self.legal_actions),
-                                    thread_no = self.thread_no
-                                    )
+            if self.args.asynchronousRL == 'A3C':            
+                self.model_runner = ModelRunnerTFA3C(
+                                self.global_list,
+                                self.args, 
+                                max_action_no = len(self.legal_actions),
+                                thread_no = self.thread_no
+                                )
+            elif self.args.asynchronousRL == 'A3C_LSTM':            
+                self.model_runner = ModelRunnerTFA3CLstm(
+                                self.global_list,
+                                self.args, 
+                                max_action_no = len(self.legal_actions),
+                                thread_no = self.thread_no
+                                )
+            elif self.args.asynchronousRL == '1Q':
+                print 'Need to implement Asyncronous 1Q'
+                """
+                self.model_runner = ModelRunnerTFAsync(
+                                self.global_list,
+                                self.args, 
+                                max_action_no = len(self.legal_actions),
+                                thread_no = self.thread_no
+                                )
+                """
             else:
                 self.model_runner = ModelRunnerTF(
                                     self.args, 
@@ -204,7 +203,7 @@ class DeepRLPlayer:
         return self.model_runner.predict_state(state)
     
     def print_env(self):
-        if self.args.asynchronousRL == False or self.thread_no == 0:
+        if self.args.asynchronousRL == None or self.thread_no == 0:
             print 'Start time: %s' % time.strftime('%Y.%m.%d %H:%M:%S')
             print '[ Running Environment ]'
             for arg in sorted(vars(self.args)):
@@ -216,12 +215,13 @@ class DeepRLPlayer:
         self.current_state = None
         action_index = 0
         
-        if self.args.asynchronousRL_type == 'A3C_LSTM':
+        if self.args.asynchronousRL == 'A3C_LSTM':
             self.model_runner.reset_lstm_state()
-        
-        for _ in range(random.randint(4, 30)):
-            reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
-            self.replay_memory.add(action_index, reward, state, terminal)
+
+        if self.args.use_random_action_on_reset:
+            for _ in range(random.randint(4, 30)):
+                reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
+                self.replay_memory.add(action_index, reward, state, terminal)
     
     def save_screen_as_png(self, file_name, screen):
         pngfile = open(file_name, 'wb')
@@ -230,6 +230,16 @@ class DeepRLPlayer:
         pngfile.close()
 
     def do_actions(self, action_index, mode):
+        global debug_display
+        global debug_display_sleep
+        
+        if self.thread_no == 0:
+            _debug_display = debug_display
+            _debug_display_sleep = debug_display_sleep
+        else:
+            _debug_display = False
+            _debug_display_sleep = 0
+        
         action = self.legal_actions[action_index]
         reward = 0
         terminal = False 
@@ -257,7 +267,7 @@ class DeepRLPlayer:
         else:
             if self.args.use_ale_frame_skip == True:
                 reward += self.env.act(action)
-                new_state = self.env.getScreenGrayscale()
+                new_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
                 game_over = self.env.game_over()
                 if (self.args.lost_life_terminal == True and self.env.lives() < lives) or game_over:
                     terminal = True
@@ -265,11 +275,11 @@ class DeepRLPlayer:
                         game_over = True
             else:
                 if self.current_state is None:
-                    self.current_state = self.env.getScreenGrayscale()                
+                    self.current_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)                
                 for _ in range(frame_repeat):
                     prev_state = self.current_state
                     reward += self.env.act(action)
-                    state = self.env.getScreenGrayscale()
+                    state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
                     if state is not None:
                         self.current_state = state 
                     game_over = self.env.game_over()
@@ -279,7 +289,7 @@ class DeepRLPlayer:
                             game_over = True
                         break
                 new_state = np.maximum(prev_state, self.current_state)
-            resized = cv2.resize(new_state, (self.args.screen_height, self.args.screen_width))
+            resized = cv2.resize(new_state, (self.args.screen_width, self.args.screen_height))
             return reward, resized, terminal, game_over
     
     def generate_replay_memory(self, count):
@@ -298,7 +308,15 @@ class DeepRLPlayer:
         if self.thread_no == 0:
             print 'Generating replay memory took %.0f sec' % (time.time() - start_time)
         
+    def check_pause(self):
+        global debug_pause
+        if debug_pause:
+            while debug_pause:
+                time.sleep(1.0)
+        
     def test(self, epoch):
+        global debug_print
+        
         episode = 0
         total_reward = 0
         test_start_time = time.time()
@@ -306,8 +324,7 @@ class DeepRLPlayer:
         
         episode_reward = 0
         for step_no in range(self.args.test_step):
-            action_index, greedy_epsilon = self.get_action_index('TEST')
-                
+            action_index, greedy_epsilon = self.get_action_index('TEST')                
             reward, state, terminal, game_over = self.do_actions(action_index, 'TEST')
                 
             episode_reward += reward
@@ -320,11 +337,13 @@ class DeepRLPlayer:
                 self.reset_game()
                 episode_reward = 0
             
-                if self.debug:
+                if debug_print:
                     print "[ Test  %s ] %s steps, avg score: %.1f. ep: %d, elapsed: %.0fs. last e: %.3f" % \
                           (epoch, step_no, float(total_reward) / episode, episode, 
                            time.time() - test_start_time,
                            greedy_epsilon)
+            
+            self.check_pause()
         
         episode = max(episode, 1)          
         print "[ Test  %s ] avg score: %.1f. elapsed: %.0fs. last e: %.3f" % \
@@ -359,7 +378,7 @@ class DeepRLPlayer:
                     
                 if step_no % self.args.train_step == 0:
                     minibatch = self.replay_memory.get_minibatch()
-                    self.model_runner.train(minibatch, self.replay_memory, self.debug)
+                    self.model_runner.train(minibatch, self.replay_memory, debug_print)
                     self.train_step += 1
                 
                     if self.train_step % self.args.save_step == 0 and self.thread_no == 0:
@@ -384,13 +403,15 @@ class DeepRLPlayer:
                 if step_no > 0 and step_no % self.args.update_step == 0:
                     self.model_runner.update_model()
                 
+                self.check_pause()
+                
             print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. last e: %.3f, train=%s" % \
                   (epoch, float(epoch_total_reward) / episode, 
                    time.time() - epoch_start_time,
                    greedy_epsilon, self.train_step)
              
             # Test once every epoch
-            if args.asynchronousRL == False:
+            if args.asynchronousRL == None:
                 self.test(epoch)
             else:
                 if self.thread_no == self.next_test_thread_no:
@@ -409,6 +430,9 @@ class DeepRLPlayer:
 
     def train_async_a3c(self, replay_memory_no=None):
         global global_step_no
+        global debug_print
+        global debug_pause
+
         max_global_step_no = self.args.max_epoch * self.args.epoch_step * self.args.multi_thread_no
         last_time = 0
         last_global_step_no = 0
@@ -435,7 +459,7 @@ class DeepRLPlayer:
             while step_no <= self.args.epoch_step:
                 v_pres = []
     
-                if self.args.asynchronousRL_type == 'A3C_LSTM':
+                if self.args.asynchronousRL == 'A3C_LSTM':
                     lstm_state_value = self.model_runner.get_lstm_state()            
                 for i in range(self.args.train_step):
                     action_index, state_value = self.get_action_state_value('TRAIN')
@@ -462,7 +486,7 @@ class DeepRLPlayer:
                 prestates, actions, rewards, _, terminals = self.replay_memory.get_minibatch(data_len)
                 learning_rate = self._anneal_learning_rate(max_global_step_no, global_step_no)
 
-                if self.args.asynchronousRL_type == 'A3C_LSTM':
+                if self.args.asynchronousRL == 'A3C_LSTM':
                     self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate, lstm_state_value)
                 else:
                     self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate)
@@ -470,7 +494,12 @@ class DeepRLPlayer:
                 self.train_step += 1
                 
                 if game_over:
-                    if episode % 500 == 0:
+                    if debug_print:
+                        print_step = 1
+                    else:
+                        print_step = 500
+                        
+                    if episode % print_step == 0:
                         print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
@@ -492,6 +521,8 @@ class DeepRLPlayer:
                             last_time = current_time
                             last_global_step_no = global_step_no
 
+                self.check_pause()
+
             self.epoch_done = epoch
 
             print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. learning_rate=%.5f" % \
@@ -507,7 +538,7 @@ class DeepRLPlayer:
              
             # Test once every epoch
             if args.run_test == True:
-                if args.asynchronousRL == False:
+                if args.asynchronousRL == None:
                     self.test(epoch)
                 else:
                     if self.thread_no == self.next_test_thread_no:
@@ -543,16 +574,44 @@ class DebugInput(threading.Thread):
         self.running = True
     
     def run(self):
-        time.sleep(5)
+        global debug_print
+        global debug_pause
+        global debug_display
+        global debug_display_sleep
+        
+        time.sleep(10)
         while (self.running):
             input = raw_input('')
-            if input == 'd':
-                self.player.debug = not self.player.debug
-                print 'Debug mode : %s' % self.player.debug
+            if input == 'p':
+                debug_print = not debug_print
+                print 'Debug print : %s' % debug_print
+            elif input == 'u':
+                debug_pause = not debug_pause
+                print 'Debug pause : %s' % debug_pause
+            elif input == 'd':
+                if debug_display == False:
+                    cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+                    debug_display = True
+                else:
+                    debug_display = False
+                    cv2.destroyAllWindows()                    
+                print 'Debug display : %s' % debug_display
+            elif input == '-':
+                debug_display_sleep -= 20
+                debug_display_sleep = max(1, debug_display_sleep)
+                print 'Debug display_sleep : %s' % debug_display_sleep
+            elif input == '+':
+                debug_display_sleep += 20
+                debug_display_sleep = min(500, debug_display_sleep)
+                print 'Debug display_sleep : %s' % debug_display_sleep
                 
     def finish(self):
         self.running = False
     
+debug_print = False
+debug_pause = False
+debug_display = False
+debug_display_sleep = 100
 global_data = []
 global_step_no = 0
 
@@ -573,7 +632,7 @@ if __name__ == '__main__':
     args = get_args()
     save_file = args.retrain_file
 
-    if args.asynchronousRL == True:
+    if args.asynchronousRL != None:
         threadList = []
         playerList = []
 
@@ -581,10 +640,10 @@ if __name__ == '__main__':
         legal_actions = env.get_actions(args.rom)
         
         # initialize global settings
-        if args.asynchronousRL_type == 'A3C':
-            model = ModelA3C(args.device, 'global', args.network_type, True,  len(legal_actions))
-        elif args.asynchronousRL_type == 'A3C_LSTM':     
-            model = ModelA3CLstm(args.device, 'global', args.network_type, True,  len(legal_actions))
+        if args.asynchronousRL == 'A3C':
+            model = ModelA3C(args.device, 'global', args.network_type, args.screen_height, args.screen_width, True,  len(legal_actions))
+        elif args.asynchronousRL == 'A3C_LSTM':     
+            model = ModelA3CLstm(args.device, 'global', args.network_type, args.screen_height, args.screen_width, True,  len(legal_actions))
 
         global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
         global_sess = global_list[0]
@@ -633,7 +692,7 @@ if __name__ == '__main__':
             model.init_global(global_sess)
         
         for player in playerList:
-            if args.asynchronousRL_type.startswith('A3C'):
+            if args.asynchronousRL.startswith('A3C'):
                 target_func = player.train_async_a3c
             else:
                 target_func = player.train

@@ -9,8 +9,10 @@ def new_session(graph=None):
     return tf.Session(config=config, graph=graph)
 
 class Model(object):
-    def __init__(self, device, name, network_type, trainable, max_action_no):
+    def __init__(self, device, name, network_type, screen_height, screen_width, trainable, max_action_no):
         self.network_type = network_type
+        self.screen_height = screen_height
+        self.screen_width = screen_width 
         self.max_action_no = max_action_no
         with tf.device(device):
             self.build_network(name, network_type, trainable, max_action_no)
@@ -33,7 +35,7 @@ class Model(object):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x = tf.placeholder(tf.uint8, shape=[None, 84, 84, 4], name="screens")
+            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
             print(x)
         
             x_normalized = tf.to_float(x) / 255.0
@@ -81,7 +83,7 @@ class Model(object):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x = tf.placeholder(tf.uint8, shape=[None, 84, 84, 4], name="screens")
+            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
             print(x)
         
             x_normalized = tf.to_float(x) / 255.0
@@ -138,7 +140,7 @@ class ModelA3C(Model):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x = tf.placeholder(tf.uint8, shape=[None, 84, 84, 4], name="screens")
+            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
             print(x)
         
             x_normalized = tf.to_float(x) / 255.0
@@ -186,7 +188,7 @@ class ModelA3C(Model):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x_in = tf.placeholder(tf.float32, shape=[None, 84, 84, 4], name="screens")
+            x_in = tf.placeholder(tf.float32, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
             print(x_in)
         
             x_normalized = tf.to_float(x_in) / 255.0
@@ -237,7 +239,7 @@ class ModelA3CLstm(Model):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x = tf.placeholder(tf.uint8, shape=[None, 84, 84, 4], name="screens")
+            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
             print(x)
         
             x_normalized = tf.to_float(x) / 255.0
@@ -285,7 +287,7 @@ class ModelA3CLstm(Model):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x_in = tf.placeholder(tf.uint8, shape=[None, 84, 84, 4], name="screens")
+            x_in = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
             print(x_in)
         
             x_normalized = tf.to_float(x_in) / 255.0
@@ -303,11 +305,12 @@ class ModelA3CLstm(Model):
             h_conv2 = tf.nn.relu(tf.nn.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2, name="h_conv2")
             print(h_conv2)
     
-            h_conv2_flat = tf.reshape(h_conv2, [-1, 9 * 9 * 32], name="h_conv2_flat")
+            conv_out_size = np.prod(h_conv2._shape[1:]).value
+            h_conv2_flat = tf.reshape(h_conv2, [-1, conv_out_size], name="h_conv2_flat")
             print(h_conv2_flat)
     
             # Fourth layer is fully connected with 256 relu units
-            W_fc1, b_fc1 = self.make_layer_variables([9 * 9 * 32, 256], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 256], trainable, "fc1")
     
             h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, W_fc1) + b_fc1, name="h_fc1")
             print(h_fc1)
@@ -341,6 +344,5 @@ class ModelA3CLstm(Model):
         self.y = y
         self.y_class = y_class
         self.v = v
-        #self.variables = [W_conv1, b_conv1, W_conv2, b_conv2, W_fc1, b_fc1, W_fc2, b_fc2, W_fc3, b_fc3]
         self.variables = [W_conv1, b_conv1, W_conv2, b_conv2, W_fc1, b_fc1, W_fc2, b_fc2, W_fc3, b_fc3] + lstm_vars
              
