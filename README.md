@@ -10,7 +10,7 @@ This is to implement deep reinforcement learning algorithms including following 
 
 
 ## Test scores
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="400">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="500">
 
 ## Requirements
   - Python-2.7
