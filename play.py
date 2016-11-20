@@ -6,7 +6,8 @@ if __name__ == '__main__':
     if args.replay_file == None:
         print 'Usage: python player.py [path_to_rom_file] --replay-file [path_to_snapshot_file]'
         exit()
-
+    args.show_screen = True
+    
     print 'Play using data_file: %s' % args.replay_file
     player = DeepRLPlayer(args, args.replay_file)
     player.model_runner.load(args.replay_file + '.weight')

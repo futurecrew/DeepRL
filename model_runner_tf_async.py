@@ -14,7 +14,7 @@ class ModelRunnerTFAsync():
         self.screen_width = args.screen_width
         self.max_action_no = max_action_no
         self.discount_factor = args.discount_factor
-        self.network_type = args.network_type
+        self.network = args.network
         self.thread_no = thread_no
         
         if global_list == None:
@@ -34,8 +34,8 @@ class ModelRunnerTFAsync():
         
     def init_models(self):
         with tf.device(self.args.device):
-            self.x_in, self.y, self.var_train = self.build_network('policy', self.network_type, True, self.max_action_no)
-            self.x_target, self.y_target, self.var_target = self.build_network('target', self.network_type, False, self.max_action_no)
+            self.x_in, self.y, self.var_train = self.build_network('policy', self.network, True, self.max_action_no)
+            self.x_target, self.y_target, self.var_target = self.build_network('target', self.network, False, self.max_action_no)
     
             self.a_in = tf.placeholder(tf.float32, shape=[None, self.max_action_no])
             print('a_in %s' % (self.a_in.get_shape()))

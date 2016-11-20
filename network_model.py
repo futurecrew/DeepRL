@@ -9,13 +9,13 @@ def new_session(graph=None):
     return tf.Session(config=config, graph=graph)
 
 class Model(object):
-    def __init__(self, device, name, network_type, screen_height, screen_width, trainable, max_action_no):
-        self.network_type = network_type
+    def __init__(self, device, name, network, screen_height, screen_width, trainable, max_action_no):
+        self.network = network
         self.screen_height = screen_height
         self.screen_width = screen_width 
         self.max_action_no = max_action_no
         with tf.device(device):
-            self.build_network(name, network_type, trainable, max_action_no)
+            self.build_network(name, network, trainable, max_action_no)
     
     def make_layer_variables(self, shape, trainable, name_suffix):
         stdv = 1.0 / math.sqrt(np.prod(shape[0:-1]))
@@ -23,8 +23,8 @@ class Model(object):
         biases  = tf.Variable(tf.random_uniform([shape[-1]], minval=-stdv, maxval=stdv), trainable=trainable, name='b_' + name_suffix)
         return weights, biases
     
-    def build_network(self, name, network_type, trainable, num_actions):
-        if network_type == 'nips':
+    def build_network(self, name, network, trainable, num_actions):
+        if network == 'nips':
             self.build_network_nips(name, trainable, num_actions)
         else:
             self.build_network_nature(name, trainable, num_actions)

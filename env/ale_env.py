@@ -17,14 +17,15 @@ class AleEnv():
  
         self.ale.setFloat('repeat_action_probability', 0)
         self.ale.loadROM(rom)
-        self.actions = self.get_actions(rom)
+        self.actions = self.ale.getMinimalActionSet()
         print 'actions: %s' % self.actions
-        
         (self.screen_width,self.screen_height) = self.ale.getScreenDims()
         print("width/height: " +str(self.screen_width) + "/" + str(self.screen_height))
         
+        self.initialized = True
+        
     def get_actions(self, rom=None):
-        if self.actions == None and rom != None:
+        if self.actions is None and rom != None:
             ale = ALEInterface()
             ale.loadROM(rom)
             self.actions = ale.getMinimalActionSet()

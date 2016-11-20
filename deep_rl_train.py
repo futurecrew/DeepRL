@@ -88,21 +88,21 @@ class DeepRLPlayer:
                                     batch_dimension = self.batch_dimension
                                     )
         elif self.args.backend == 'TF':
-            if self.args.asynchronousRL == 'A3C':            
+            if self.args.drl == 'a3c':            
                 self.model_runner = ModelRunnerTFA3C(
                                 self.global_list,
                                 self.args, 
                                 max_action_no = len(self.legal_actions),
                                 thread_no = self.thread_no
                                 )
-            elif self.args.asynchronousRL == 'A3C_LSTM':            
+            elif self.args.drl == 'a3c_lstm':            
                 self.model_runner = ModelRunnerTFA3CLstm(
                                 self.global_list,
                                 self.args, 
                                 max_action_no = len(self.legal_actions),
                                 thread_no = self.thread_no
                                 )
-            elif self.args.asynchronousRL == '1Q':
+            elif self.args.drl == '1Q':
                 print 'Need to implement Asyncronous 1Q'
                 """
                 self.model_runner = ModelRunnerTFAsync(
@@ -203,7 +203,7 @@ class DeepRLPlayer:
         return self.model_runner.predict_state(state)
     
     def print_env(self):
-        if self.args.asynchronousRL == None or self.thread_no == 0:
+        if self.args.asynchronousRL == False or self.thread_no == 0:
             print 'Start time: %s' % time.strftime('%Y.%m.%d %H:%M:%S')
             print '[ Running Environment ]'
             for arg in sorted(vars(self.args)):
@@ -215,7 +215,7 @@ class DeepRLPlayer:
         self.current_state = None
         action_index = 0
         
-        if self.args.asynchronousRL == 'A3C_LSTM':
+        if self.args.drl == 'a3c_lstm':
             self.model_runner.reset_lstm_state()
 
         if self.args.use_random_action_on_reset:
@@ -297,7 +297,8 @@ class DeepRLPlayer:
             print 'Generating %s replay memory' % count
         start_time = time.time()
         self.reset_game()
-        for _ in range(count):
+        for i in range(count):
+            print 'g : %s' % i
             action_index, greedy_epsilon = self.get_action_index('TRAIN')
             reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
             self.replay_memory.add(action_index, reward, state, terminal)
@@ -411,12 +412,13 @@ class DeepRLPlayer:
                    greedy_epsilon, self.train_step)
              
             # Test once every epoch
-            if args.asynchronousRL == None:
-                self.test(epoch)
-            else:
-                if self.thread_no == self.next_test_thread_no:
+            if args.run_test == True:
+                if args.asynchronousRL == False:
                     self.test(epoch)
-                self.next_test_thread_no = (self.next_test_thread_no + 1) % self.args.multi_thread_no
+                else:
+                    if self.thread_no == self.next_test_thread_no:
+                        self.test(epoch)
+                    self.next_test_thread_no = (self.next_test_thread_no + 1) % self.args.multi_thread_no
                     
             self.epoch_done = epoch
                 
@@ -459,7 +461,7 @@ class DeepRLPlayer:
             while step_no <= self.args.epoch_step:
                 v_pres = []
     
-                if self.args.asynchronousRL == 'A3C_LSTM':
+                if self.args.drl == 'a3c_lstm':
                     lstm_state_value = self.model_runner.get_lstm_state()            
                 for i in range(self.args.train_step):
                     action_index, state_value = self.get_action_state_value('TRAIN')
@@ -486,7 +488,7 @@ class DeepRLPlayer:
                 prestates, actions, rewards, _, terminals = self.replay_memory.get_minibatch(data_len)
                 learning_rate = self._anneal_learning_rate(max_global_step_no, global_step_no)
 
-                if self.args.asynchronousRL == 'A3C_LSTM':
+                if self.args.drl == 'a3c_lstm':
                     self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate, lstm_state_value)
                 else:
                     self.model_runner.train(prestates, v_pres, actions, rewards, terminals, v_post, learning_rate)
@@ -538,7 +540,7 @@ class DeepRLPlayer:
              
             # Test once every epoch
             if args.run_test == True:
-                if args.asynchronousRL == None:
+                if args.asynchronousRL == False:
                     self.test(epoch)
                 else:
                     if self.thread_no == self.next_test_thread_no:
@@ -632,7 +634,7 @@ if __name__ == '__main__':
     args = get_args()
     save_file = args.retrain_file
 
-    if args.asynchronousRL != None:
+    if args.asynchronousRL:
         threadList = []
         playerList = []
 
@@ -640,10 +642,10 @@ if __name__ == '__main__':
         legal_actions = env.get_actions(args.rom)
         
         # initialize global settings
-        if args.asynchronousRL == 'A3C':
-            model = ModelA3C(args.device, 'global', args.network_type, args.screen_height, args.screen_width, True,  len(legal_actions))
-        elif args.asynchronousRL == 'A3C_LSTM':     
-            model = ModelA3CLstm(args.device, 'global', args.network_type, args.screen_height, args.screen_width, True,  len(legal_actions))
+        if args.drl == 'a3c':
+            model = ModelA3C(args.device, 'global', args.network, args.screen_height, args.screen_width, True,  len(legal_actions))
+        elif args.drl == 'a3c_lstm':     
+            model = ModelA3CLstm(args.device, 'global', args.network, args.screen_height, args.screen_width, True,  len(legal_actions))
 
         global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
         global_sess = global_list[0]
@@ -692,7 +694,7 @@ if __name__ == '__main__':
             model.init_global(global_sess)
         
         for player in playerList:
-            if args.asynchronousRL.startswith('A3C'):
+            if args.drl.startswith('a3c'):
                 target_func = player.train_async_a3c
             else:
                 target_func = player.train

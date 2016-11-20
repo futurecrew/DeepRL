@@ -13,14 +13,13 @@ def get_args():
     parser = argparse.ArgumentParser()    
     
     parser.add_argument('rom', type=str, help='ALE rom file')    
-    parser.add_argument('--asynchronousRL', type=str, default=None, help='A3C_LSTM, A3C, 1Q, None')
     parser.add_argument('--multi-thread-no', type=int, default=1, help='Number of multiple threads for Asynchronous RL')
-    parser.add_argument('--network-type', type=str, default='nips', help='network model nature or nips') 
-    parser.add_argument('--dqn-type', type=str, default='dqn', help='dqn, double-dqn, prioritized-rank, prioritized-proportion') 
+    parser.add_argument('--network', type=str, default='nips', choices=['nips', 'nature'], help='network model nature or nips') 
+    parser.add_argument('--drl', type=str, default='dqn', choices=['dqn', 'double_dqn', 'prioritized_rank', 'prioritized_proportion', 'a3c_lstm', 'a3c', '1q'])
     parser.add_argument('--retrain-file', type=str, default=None, help='trained file to resume training') 
     parser.add_argument('--replay-file', type=str, default=None, help='trained file to replay') 
     parser.add_argument('--device', type=str, default='', help='(gpu, cpu)')
-    parser.add_argument('--env', type=str, default='ale', help='environment(ale, vizdoom)')
+    parser.add_argument('--env', type=str, default='ale', choices=['ale', 'vizdoom'])
     parser.add_argument('--show-screen', action='store_true', help='whether to show display or not')
     parser.set_defaults(show_screen=False)
     
@@ -46,7 +45,8 @@ def get_args():
         args.dnn_initializer = 'fan_in'    # 
         args.use_gpu_replay_mem = False       # Whether to store replay memory in gpu or not to speed up leraning        
     
-    if args.asynchronousRL != None:
+    if args.drl in ['a3c_lstm', 'a3c', '1q']:
+        args.asynchronousRL = True
         args.train_batch_size = 5
         args.max_replay_memory = 30
         args.max_epoch = 20
@@ -72,6 +72,7 @@ def get_args():
             args.frame_repeat = 12
             args.use_random_action_on_reset = False
     else:
+        args.asynchronousRL = False
         args.train_batch_size = 32
         args.max_replay_memory = 1000000
         args.max_epoch = 200
@@ -90,33 +91,33 @@ def get_args():
         args.optimizer = 'RMSProp'    # 
         args.save_step = 50000            # save result every this training step
     
-        if args.dqn_type == 'dqn':                     # DQN hyper params
+        if args.drl == 'dqn':                     # DQN hyper params
             args.double_dqn = False                   # whether to use double dqn
             args.test_epsilon = 0.05                    # greedy epsilon for test
             args.prioritized_replay = False
-        elif args.dqn_type == 'double_dqn':    # Double DQN hyper params
-            args.double_dqn = True    # 
+        elif args.drl == 'double_dqn':    # Double DQN hyper params
+            args.double_dqn = True
             args.train_min_epsilon = 0.01    # 
             args.test_epsilon = 0.001    # 
             args.update_step = 30000    #
             args.prioritized_replay = False 
-        elif args.dqn_type == 'prioritized_rank':    # Prioritized experience replay params for RANK
+        elif args.drl == 'prioritized_rank':    # Prioritized experience replay params for RANK
             args.prioritized_replay = True    # 
             args.learning_rate = 0.00025 / 4    # 
             args.prioritized_mode = 'RANK'    # 
             args.sampling_alpha = 0.7    # 
             args.sampling_beta = 0.5    # 
             args.heap_sort_term = 250000    # 
-            args.prioritized_replay = True
+            args.double_dqn = True
             args.use_priority_weight = True    # whether to priority weight
-        elif args.dqn_type == 'prioritized_proportion':    # Prioritized experience replay params for PROPORTION
+        elif args.drl == 'prioritized_proportion':    # Prioritized experience replay params for PROPORTION
             args.prioritized_replay = True    # 
             args.learning_rate = 0.00025 / 4    # 
             args.prioritized_mode = 'PROPORTION'    # 
             args.sampling_alpha = 0.6    # 
             args.sampling_beta = 0.4    # 
             args.heap_sort_term = 250000    # 
-            args.prioritized_replay = True
+            args.double_dqn = True
             args.use_priority_weight = True    # whether to priority weight
 
     return args

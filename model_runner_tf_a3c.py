@@ -24,7 +24,7 @@ class ModelRunnerTFA3C(ModelRunnerTFAsync):
             self.init_gradients(loss, self.model.get_vars())
         
     def new_model(self, name):
-        return ModelA3C(self.args.device, name, self.network_type, self.screen_height, self.screen_width, True, self.max_action_no)
+        return ModelA3C(self.args.device, name, self.network, self.screen_height, self.screen_width, True, self.max_action_no)
     
     def get_loss(self):
         with tf.device(self.args.device):
