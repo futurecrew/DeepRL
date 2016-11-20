@@ -6,6 +6,9 @@ This is to implement deep reinforcement learning algorithms including following 
   - Asynchronous Methods for Deep Reinforcement Learning
   - Prioritized Experience Replay
 
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="300">
+
+
 ## Test scores
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="400">
 
