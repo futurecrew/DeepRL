@@ -22,4 +22,10 @@ python deep_rl_train.py [path_to_rom_file] --multi-thread-no 8
 ## How to run
 ```
 python play.py [path_to_rom_file] --replay-file [path_to_snapshot_file]
+e.g. python play.py space_invaders.bin --replay-file snapshot/space_invaders/20161114_003838/a3c_40425623
 ```
+
+## Reference projects
+  - https://github.com/tambetm/simple_dqn
+  - https://github.com/miyosuda/async_deep_reinforce
+  - https://github.com/muupan/async-rl
