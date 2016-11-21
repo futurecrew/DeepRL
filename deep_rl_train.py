@@ -297,8 +297,7 @@ class DeepRLPlayer:
             print 'Generating %s replay memory' % count
         start_time = time.time()
         self.reset_game()
-        for i in range(count):
-            print 'g : %s' % i
+        for _ in range(count):
             action_index, greedy_epsilon = self.get_action_index('TRAIN')
             reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
             self.replay_memory.add(action_index, reward, state, terminal)
@@ -339,17 +338,17 @@ class DeepRLPlayer:
                 episode_reward = 0
             
                 if debug_print:
-                    print "[ Test  %s ] %s steps, avg score: %.1f. ep: %d, elapsed: %.0fs. last e: %.3f" % \
+                    print "[ Test  %s ] %s steps, avg score: %.1f. ep: %d, elapsed: %.0fm. last e: %.3f" % \
                           (epoch, step_no, float(total_reward) / episode, episode, 
-                           time.time() - test_start_time,
+                           (time.time() - test_start_time) / 60,
                            greedy_epsilon)
             
             self.check_pause()
         
         episode = max(episode, 1)          
-        print "[ Test  %s ] avg score: %.1f. elapsed: %.0fs. last e: %.3f" % \
+        print "[ Test  %s ] avg score: %.1f. elapsed: %.0fm. last e: %.3f" % \
               (epoch, float(total_reward) / episode, 
-               time.time() - test_start_time,
+               (time.time() - test_start_time) / 60,
                greedy_epsilon)
                   
     def train(self, replay_memory_no=None):
@@ -388,12 +387,12 @@ class DeepRLPlayer:
                      
                 if game_over:
                     if episode % 500 == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
+                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.0fm" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
                                                                                 float(epoch_total_reward) / episode,
                                                                                 self.train_step,
-                                                                                (time.time() - start_time))
+                                                                                (time.time() - start_time) / 60)
                     episode_start_time = time.time()
                     
                     episode += 1
@@ -406,9 +405,9 @@ class DeepRLPlayer:
                 
                 self.check_pause()
                 
-            print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. last e: %.3f, train=%s" % \
+            print "[ Train %s ] avg score: %.1f. elapsed: %.0fm. last e: %.3f, train=%s" % \
                   (epoch, float(epoch_total_reward) / episode, 
-                   time.time() - epoch_start_time,
+                   (time.time() - epoch_start_time) / 60,
                    greedy_epsilon, self.train_step)
              
             # Test once every epoch
@@ -502,12 +501,12 @@ class DeepRLPlayer:
                         print_step = 500
                         
                     if episode % print_step == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.1fs" % (
+                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.0fm" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
                                                                                 float(epoch_total_reward) / episode,
                                                                                 self.train_step,
-                                                                                (time.time() - start_time))
+                                                                                (time.time() - start_time) / 60)
                     episode_start_time = time.time()
                     
                     episode += 1
@@ -527,9 +526,9 @@ class DeepRLPlayer:
 
             self.epoch_done = epoch
 
-            print "[ Train %s ] avg score: %.1f. elapsed: %.0fs. learning_rate=%.5f" % \
+            print "[ Train %s ] avg score: %.1f. elapsed: %.0fm. learning_rate=%.5f" % \
                   (epoch, float(epoch_total_reward) / episode, 
-                   time.time() - epoch_start_time, learning_rate)
+                   (time.time() - epoch_start_time) / 60, learning_rate)
                 
             if self.thread_no == 0:
                 file_name = 'a3c_%s' % global_step_no
