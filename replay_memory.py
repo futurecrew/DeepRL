@@ -158,8 +158,14 @@ class ReplayMemory:
     return self.prestates[:data_size_to_ret, ...], actions, rewards, self.poststates[:data_size_to_ret, ...], terminals
 
   def add_to_history_buffer(self, state):
+        if self.history_buffer_empty:
+            for i in range(self.history_length):
+                self.history_buffer[0, :, :, i] = state
+            self.history_buffer_empty = False
+            
         self.history_buffer[0, :, :, :-1] = self.history_buffer[0, :, :, 1:]
         self.history_buffer[0, :, :, -1] = state
 
   def clear_history_buffer(self):
         self.history_buffer.fill(0)
+        self.history_buffer_empty = True
