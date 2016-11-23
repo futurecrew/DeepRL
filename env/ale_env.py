@@ -40,7 +40,7 @@ class AleEnv():
     def getScreenRGB(self):
         return self.ale.getScreenRGB()
     
-    def getScreenGrayscale(self, debug_display, debug_display_sleep):
+    def getScreenGrayscale(self, debug_display=False, debug_display_sleep=0):
         return self.ale.getScreenGrayscale()
     
     def act(self, action):

@@ -40,6 +40,7 @@ class DeepRLPlayer:
                                       self.args.screen_height, 
                                       self.args.screen_width)
 
+        self.blank_screen = np.zeros((self.args.screen_width, self.args.screen_height))
         self.train_step = 0
         self.epoch_done = 0
         self.next_test_thread_no = 0
@@ -149,10 +150,13 @@ class DeepRLPlayer:
         if mode == 'TEST':
             greedy_epsilon = self.args.test_epsilon
         else:
-            min_epsilon = args.train_min_epsilon
+            min_epsilon = self.args.train_min_epsilon
             train_frequency = self.args.train_step
-            if self.train_step * train_frequency <= 10**6:
-                greedy_epsilon = 1.0 - (1.0 - min_epsilon) / 10**6 * self.train_step * train_frequency
+            process_step = self.train_step * train_frequency
+            if self.train_step < self.args.train_epsilon_start_step:
+                return 1.0
+            elif process_step <= self.args.train_epsilon_end_step:
+                greedy_epsilon = ((self.args.train_min_epsilon - 1) * process_step + self.args.train_epsilon_end_step - self.args.train_epsilon_start_step *  self.args.train_min_epsilon) / (self.args.train_epsilon_end_step - self.args.train_epsilon_start_step)
             else:
                 greedy_epsilon = min_epsilon
         return greedy_epsilon
@@ -222,6 +226,9 @@ class DeepRLPlayer:
             for _ in range(random.randint(4, 30)):
                 reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
                 self.replay_memory.add(action_index, reward, state, terminal)
+        else:
+            state = self.resize_screen(self.env.getScreenGrayscale())
+            self.replay_memory.add_to_history_buffer(state)
     
     def save_screen_as_png(self, file_name, screen):
         pngfile = open(file_name, 'wb')
@@ -229,6 +236,10 @@ class DeepRLPlayer:
         png_writer.write(pngfile, screen)
         pngfile.close()
 
+    def resize_screen(self, state):
+        resized = cv2.resize(state, (self.args.screen_width, self.args.screen_height))
+        return resized
+        
     def do_actions(self, action_index, mode):
         global debug_display
         global debug_display_sleep
@@ -289,6 +300,8 @@ class DeepRLPlayer:
                             game_over = True
                         break
                 new_state = np.maximum(prev_state, self.current_state)
+            if new_state is None:
+                new_state = self.blank_screen
             resized = cv2.resize(new_state, (self.args.screen_width, self.args.screen_height))
             return reward, resized, terminal, game_over
     
@@ -334,14 +347,15 @@ class DeepRLPlayer:
             if(game_over):
                 episode += 1
                 total_reward += episode_reward
-                self.reset_game()
-                episode_reward = 0
             
                 if debug_print:
-                    print "[ Test  %s ] %s steps, avg score: %.1f. ep: %d, elapsed: %.0fm. last e: %.3f" % \
-                          (epoch, step_no, float(total_reward) / episode, episode, 
+                    print "[ Test  %s ] score: %s, avg score: %.1f. ep: %d, elapsed: %.0fm. last e: %.3f" % \
+                          (epoch, episode_reward, float(total_reward) / episode, episode, 
                            (time.time() - test_start_time) / 60,
                            greedy_epsilon)
+
+                self.reset_game()
+                episode_reward = 0
             
             self.check_pause()
         
@@ -405,10 +419,10 @@ class DeepRLPlayer:
                 
                 self.check_pause()
                 
-            print "[ Train %s ] avg score: %.1f. elapsed: %.0fm. last e: %.3f, train=%s" % \
+            print "[ Train %s ] avg score: %.1f. elapsed: %.0fm. last e: %.3f, train:%s, t_elapsed: %.0fm" % \
                   (epoch, float(epoch_total_reward) / episode, 
                    (time.time() - epoch_start_time) / 60,
-                   greedy_epsilon, self.train_step)
+                   greedy_epsilon, self.train_step, (time.time() - start_time) / 60)
              
             # Test once every epoch
             if args.run_test == True:
@@ -420,8 +434,10 @@ class DeepRLPlayer:
                     self.next_test_thread_no = (self.next_test_thread_no + 1) % self.args.multi_thread_no
                     
             self.epoch_done = epoch
-                
-        self.model_runner.finish_train()
+                        
+        if self.thread_no == 0:
+            file_name = 'dqn_%s' % self.train_step
+            self.save(file_name)    
 
     def _anneal_learning_rate(self, max_global_step_no, global_step_no):
         learning_rate = self.args.learning_rate * (max_global_step_no - global_step_no) / max_global_step_no
@@ -501,7 +517,7 @@ class DeepRLPlayer:
                         print_step = 500
                         
                     if episode % print_step == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.0fm" % (
+                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train:%s, t_elapsed: %.0fm" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
                                                                                 float(epoch_total_reward) / episode,
@@ -626,7 +642,7 @@ def get_env(args, initialize, show_screen):
         from env.vizdoom_env import VizDoomEnv 
         env = VizDoomEnv()
         if initialize:
-            env.initialize(show_screen)
+            env.initialize(args.config_file_path, show_screen)
     return env
 
 if __name__ == '__main__':

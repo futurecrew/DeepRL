@@ -30,8 +30,8 @@ class ModelRunnerTF(object):
 
     def init_models(self, network, max_action_no, learning_rate, rms_decay, rms_epsilon):        
         with tf.device(self.args.device):
-            model_policy = Model(self.args.device, "policy", network, self.args.screen_height, self.args.screen_width, True, max_action_no)
-            model_target = Model(self.args.device, "target", network, self.args.screen_height, self.args.screen_width, False, max_action_no)
+            model_policy = Model(self.args.device, "policy", network, self.args.screen_height, self.args.screen_width, self.args.screen_history, True, max_action_no)
+            model_target = Model(self.args.device, "target", network, self.args.screen_height, self.args.screen_width, self.args.screen_history, False, max_action_no)
     
             self.x_in, self.y, self.var_train = model_policy.x, model_policy.y, model_policy.variables
             self.x_target, self.y_target, self.var_target = model_target.x, model_target.y, model_target.variables

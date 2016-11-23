@@ -9,10 +9,11 @@ def new_session(graph=None):
     return tf.Session(config=config, graph=graph)
 
 class Model(object):
-    def __init__(self, device, name, network, screen_height, screen_width, trainable, max_action_no):
+    def __init__(self, device, name, network, screen_height, screen_width, history_len, trainable, max_action_no):
         self.network = network
         self.screen_height = screen_height
         self.screen_width = screen_width 
+        self.history_len = history_len
         self.max_action_no = max_action_no
         with tf.device(device):
             self.build_network(name, network, trainable, max_action_no)
@@ -35,14 +36,14 @@ class Model(object):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
+            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, self.history_len], name="screens")
             print(x)
         
             x_normalized = tf.to_float(x) / 255.0
             print(x_normalized)
     
             # Second layer convolves 32 8x8 filters with stride 4 with relu
-            W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 32], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 32], trainable, "conv1")
     
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
@@ -59,11 +60,13 @@ class Model(object):
             h_conv3 = tf.nn.relu(tf.nn.conv2d(h_conv2, W_conv3, strides=[1, 1, 1, 1], padding='VALID') + b_conv3, name="h_conv3")
             print(h_conv3)
     
-            h_conv3_flat = tf.reshape(h_conv3, [-1, 7 * 7 * 64], name="h_conv3_flat")
+            conv_out_size = np.prod(h_conv3._shape[1:]).value
+    
+            h_conv3_flat = tf.reshape(h_conv3, [-1, conv_out_size], name="h_conv3_flat")
             print(h_conv3_flat)
     
             # Fifth layer is fully connected with 512 relu units
-            W_fc1, b_fc1 = self.make_layer_variables([7 * 7 * 64, 512], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 512], trainable, "fc1")
     
             h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat, W_fc1) + b_fc1, name="h_fc1")
             print(h_fc1)
@@ -83,14 +86,14 @@ class Model(object):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
+            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, self.history_len], name="screens")
             print(x)
         
             x_normalized = tf.to_float(x) / 255.0
             print(x_normalized)
     
             # Second layer convolves 16 8x8 filters with stride 4 with relu
-            W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 16], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 16], trainable, "conv1")
     
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
@@ -101,11 +104,13 @@ class Model(object):
             h_conv2 = tf.nn.relu(tf.nn.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2, name="h_conv2")
             print(h_conv2)
     
-            h_conv2_flat = tf.reshape(h_conv2, [-1, 9 * 9 * 32], name="h_conv2_flat")
+            conv_out_size = np.prod(h_conv2._shape[1:]).value
+    
+            h_conv2_flat = tf.reshape(h_conv2, [-1, conv_out_size], name="h_conv2_flat")
             print(h_conv2_flat)
     
             # Fourth layer is fully connected with 256 relu units
-            W_fc1, b_fc1 = self.make_layer_variables([9 * 9 * 32, 256], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 256], trainable, "fc1")
     
             h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, W_fc1) + b_fc1, name="h_fc1")
             print(h_fc1)
@@ -140,14 +145,14 @@ class ModelA3C(Model):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
+            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, self.history_len], name="screens")
             print(x)
         
             x_normalized = tf.to_float(x) / 255.0
             print(x_normalized)
     
             # Second layer convolves 32 8x8 filters with stride 4 with relu
-            W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 32], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 32], trainable, "conv1")
     
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
@@ -188,14 +193,14 @@ class ModelA3C(Model):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x_in = tf.placeholder(tf.float32, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
+            x_in = tf.placeholder(tf.float32, shape=[None, self.screen_height, self.screen_width, self.history_len], name="screens")
             print(x_in)
         
             x_normalized = tf.to_float(x_in) / 255.0
             print(x_normalized)
     
             # Second layer convolves 16 8x8 filters with stride 4 with relu
-            W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 16], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 16], trainable, "conv1")
     
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
@@ -239,14 +244,14 @@ class ModelA3CLstm(Model):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
+            x = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, self.history_len], name="screens")
             print(x)
         
             x_normalized = tf.to_float(x) / 255.0
             print(x_normalized)
     
             # Second layer convolves 32 8x8 filters with stride 4 with relu
-            W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 32], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 32], trainable, "conv1")
     
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
@@ -287,14 +292,14 @@ class ModelA3CLstm(Model):
     
         with tf.variable_scope(name):
             # First layer takes a screen, and shrinks by 2x
-            x_in = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, 4], name="screens")
+            x_in = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, self.history_len], name="screens")
             print(x_in)
         
             x_normalized = tf.to_float(x_in) / 255.0
             print(x_normalized)
     
             # Second layer convolves 16 8x8 filters with stride 4 with relu
-            W_conv1, b_conv1 = self.make_layer_variables([8, 8, 4, 16], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 16], trainable, "conv1")
     
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             print(h_conv1)
