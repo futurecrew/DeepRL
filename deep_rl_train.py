@@ -7,10 +7,12 @@ import random
 import scipy.ndimage as ndimage
 import cv2
 import pickle
+import sys
 import threading
 import time
 import util
 import png
+from select import select
 from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
 from model_runner_tf_a3c import ModelRunnerTFA3C
@@ -78,7 +80,10 @@ class DeepRLPlayer:
         self.initialize_replay_memory()
         
         if self.thread_no == 0:
-            DebugInput(self).start()
+            self.debug_input = DebugInput(self)
+            self.debug_input.start()
+        else:
+            self.debug_input = None
         
     def initialize_model(self):
         if self.args.backend == 'NEON':
@@ -400,8 +405,13 @@ class DeepRLPlayer:
                         self.save(file_name)
                      
                 if game_over:
-                    if episode % 500 == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train=%s, t_elapsed: %.0fm" % (
+                    if debug_print:
+                        print_step = 1
+                    else:
+                        print_step = 500
+                        
+                    if episode % print_step == 0:
+                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train:%s, t_elapsed: %.0fm" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
                                                                                 float(epoch_total_reward) / episode,
@@ -439,6 +449,9 @@ class DeepRLPlayer:
             file_name = 'dqn_%s' % self.train_step
             self.save(file_name)    
 
+        if self.debug_input != None:
+            self.debug_input.finish()
+                
     def _anneal_learning_rate(self, max_global_step_no, global_step_no):
         learning_rate = self.args.learning_rate * (max_global_step_no - global_step_no) / max_global_step_no
         if learning_rate < 0.0:
@@ -564,6 +577,9 @@ class DeepRLPlayer:
 
         print 'thread %s finished' % self.thread_no
 
+        if self.debug_input != None:
+            self.debug_input.finish()        
+
     def save(self, file_name):
         timesnapshot_folder = self.snapshot_folder + '/' + self.train_start
         if os.path.exists(timesnapshot_folder) == False:
@@ -582,6 +598,8 @@ class DeepRLPlayer:
         del d['replay_memory']
         del d['model_runner']
         del d['global_list']
+        if 'debug_input' in d:
+            del d['debug_input']
         return d
         
 class DebugInput(threading.Thread):
@@ -598,14 +616,19 @@ class DebugInput(threading.Thread):
         
         time.sleep(10)
         while (self.running):
-            input = raw_input('')
-            if input == 'p':
+            rlist, _, _ = select([sys.stdin], [], [], 1)
+            if rlist:
+                key_input = sys.stdin.readline().rstrip()
+            else:
+                continue
+            
+            if key_input == 'p':
                 debug_print = not debug_print
                 print 'Debug print : %s' % debug_print
-            elif input == 'u':
+            elif key_input == 'u':
                 debug_pause = not debug_pause
                 print 'Debug pause : %s' % debug_pause
-            elif input == 'd':
+            elif key_input == 'd':
                 if debug_display == False:
                     cv2.namedWindow('image', cv2.WINDOW_NORMAL)
                     debug_display = True
@@ -613,11 +636,11 @@ class DebugInput(threading.Thread):
                     debug_display = False
                     cv2.destroyAllWindows()                    
                 print 'Debug display : %s' % debug_display
-            elif input == '-':
+            elif key_input == '-':
                 debug_display_sleep -= 20
                 debug_display_sleep = max(1, debug_display_sleep)
                 print 'Debug display_sleep : %s' % debug_display_sleep
-            elif input == '+':
+            elif key_input == '+':
                 debug_display_sleep += 20
                 debug_display_sleep = min(500, debug_display_sleep)
                 print 'Debug display_sleep : %s' % debug_display_sleep
