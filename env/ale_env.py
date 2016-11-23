@@ -5,13 +5,13 @@ class AleEnv():
     def __init__(self):
         self.actions = None
         
-    def initialize(self, rom, display_screen=False, use_ale_frame_skip=False, frame_repeat=0):
+    def initialize(self, rom, display_screen=False, use_env_frame_skip=False, frame_repeat=0):
         self.ale = ALEInterface()
         self.ale.setInt("random_seed", random.randint(1, 1000))
         if display_screen:
             self.ale.setBool('display_screen', True)
 
-        if use_ale_frame_skip == True:
+        if use_env_frame_skip == True:
             self.ale.setInt('frame_skip', frame_repeat)
             self.ale.setBool('color_averaging', True)        
  

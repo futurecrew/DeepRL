@@ -31,7 +31,7 @@ def get_args():
     args.screen_height = 84    # input screen height
     args.screen_history = 4    # input screen history
     args.frame_repeat = 4    # how many frames to repeat in ale for one predicted action
-    args.use_ale_frame_skip = False    # whether to use ale frame_skip feature
+    args.use_env_frame_skip = False    # whether to use ale frame_skip feature
     args.discount_factor = 0.99    # RL discount factor
     args.test_step = 125000    # test for this number of steps
     args.use_random_action_on_reset = True
@@ -121,15 +121,14 @@ def get_args():
             args.screen_height = 30    # input screen height
             args.train_batch_size = 64
             args.learning_rate = 0.00025                 # RL learning rate
-            #args.use_ale_frame_skip = True
+            args.use_env_frame_skip = True
             args.frame_repeat = 12
             args.train_step = 1                 # Train every this screen step
             args.max_epoch = 20
             args.epoch_step = 2000
             args.max_replay_memory = 10000
-            args.train_start = 10        # start training after filling this replay memory size
+            args.train_start = 1        # start training after filling this replay memory size
             args.test_step = 2000
-            args.train_min_epsilon_step = 24000
             args.train_epsilon_start_step = 6000    # start decreasing greedy epsilon from this train step 
             args.train_epsilon_end_step = 24000    # end decreasing greedy epsilon from this train step 
             args.screen_history = 1    # input screen history
@@ -137,7 +136,6 @@ def get_args():
             args.rms_decay = 0.9                
             args.rms_epsilon = 1e-10                   
             args.use_random_action_on_reset = False
-            args.update_step = 100    # copy train network into target network every this train step
             args.update_step = 100    # copy train network into target network every this train step
             
     return args

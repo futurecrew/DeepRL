@@ -3,9 +3,14 @@ import cv2
 from vizdoom import *
 
 class VizDoomEnv():
-    def initialize(self, config_file_path, display_screen=False):
+    def initialize(self, config_file_path, display_screen, use_env_frame_skip, frame_repeat):
         self.game = DoomGame()
         self.game.set_window_visible(display_screen)        
+
+        if use_env_frame_skip == True:
+            self.frame_repeat = frame_repeat
+        else:
+            self.frame_repeat = 1
 
         if config_file_path == None:
             print 'Need to set vizdoom --config-file-path'
@@ -43,7 +48,7 @@ class VizDoomEnv():
         return screen
     
     def act(self, action):
-        return self.game.make_action(action)
+        return self.game.make_action(action, self.frame_repeat)
     
     def game_over(self):
         return self.game.is_episode_finished()

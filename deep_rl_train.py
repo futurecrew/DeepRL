@@ -281,7 +281,7 @@ class DeepRLPlayer:
             screen.resize((self.args.screen_height, self.args.screen_width))
             return reward, screen, terminal, game_over
         else:
-            if self.args.use_ale_frame_skip == True:
+            if self.args.use_env_frame_skip == True:
                 reward += self.env.act(action)
                 new_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
                 game_over = self.env.game_over()
@@ -307,7 +307,7 @@ class DeepRLPlayer:
                 new_state = np.maximum(prev_state, self.current_state)
             if new_state is None:
                 new_state = self.blank_screen
-            resized = cv2.resize(new_state, (self.args.screen_width, self.args.screen_height))
+            resized = self.resize_screen(new_state)
             return reward, resized, terminal, game_over
     
     def generate_replay_memory(self, count):
@@ -660,12 +660,12 @@ def get_env(args, initialize, show_screen):
         from env.ale_env import AleEnv
         env = AleEnv()
         if initialize:
-            env.initialize(args.rom, show_screen, args.use_ale_frame_skip, args.frame_repeat)
+            env.initialize(args.rom, show_screen, args.use_env_frame_skip, args.frame_repeat)
     elif args.env == 'vizdoom':
         from env.vizdoom_env import VizDoomEnv 
         env = VizDoomEnv()
         if initialize:
-            env.initialize(args.config_file_path, show_screen)
+            env.initialize(args.config_file_path, show_screen, args.use_env_frame_skip, args.frame_repeat)
     return env
 
 if __name__ == '__main__':
