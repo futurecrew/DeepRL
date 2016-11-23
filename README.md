@@ -6,26 +6,36 @@ This is to implement deep reinforcement learning algorithms including following 
   - Asynchronous Methods for Deep Reinforcement Learning
   - Prioritized Experience Replay
 
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="300">
+
+
 ## Test scores
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="400">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="500">
+
+In my PC (i7 CPU, Titan-X Maxwell),
+  - A3C FF took 20 hours (4.00M global steps/hour)
+  - A3C LSTM took 44 hours (1.84M global steps/hour)
 
 ## Requirements
-  - Python2.7
+  - Python-2.7
   - Arcade-Learning-Environment
-  - Tensorflow 1.0
+  - Tensorflow-1.0
   - cv2
   - Vizdoom (optional)
   - Neon (optional)
   
 ## How to train
 ```
-python deep_rl_train.py [path_to_rom_file] --multi-thread-no 8
+DQN        : python deep_rl_train.py /path/to/rom --network nature --drl dqn
+Double DQN : python deep_rl_train.py /path/to/rom --network nature --drl double_dqn
+A3C FF     : python deep_rl_train.py /path/to/rom --network nips --drl a3c --multi-thread-no 8
+A3C LSTM   : python deep_rl_train.py /path/to/rom --network nips --drl a3c_lstm --multi-thread-no 8
 ```
 
 ## How to run
 ```
-python play.py [path_to_rom_file] --replay-file [path_to_snapshot_file]
-e.g. python play.py space_invaders.bin --replay-file snapshot/space_invaders/20161114_003838/a3c_40425623
+python play.py /path/to/rom --replay-file path/to/snapshot_file --drl [drl_type]
+ex) python play.py ./rom/space_invaders.bin --replay-file snapshot/space_invaders/20161114_003838/a3c_79993828 --drl a3c_lstm
 ```
 
 ## Reference projects
