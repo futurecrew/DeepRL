@@ -230,10 +230,17 @@ class DeepRLPlayer:
         if self.args.use_random_action_on_reset:
             for _ in range(random.randint(4, 30)):
                 reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
-                self.replay_memory.add(action_index, reward, state, terminal)
-        else:
-            state = self.resize_screen(self.env.getScreenGrayscale())
-            self.replay_memory.add_to_history_buffer(state)
+
+        first_state = self.resize_screen(self.env.getScreenGrayscale())
+        for i in range(self.args.screen_history):
+            if i < self.args.screen_history - 1:
+                state = self.blank_screen
+            else:
+                state = first_state
+            if self.args.minibatch_random == False:
+                self.replay_memory.add(action_index, 0, state, False)
+            else:
+                self.replay_memory.add_to_history_buffer(state)
     
     def save_screen_as_png(self, file_name, screen):
         pngfile = open(file_name, 'wb')
@@ -555,7 +562,7 @@ class DeepRLPlayer:
 
             self.epoch_done = epoch
 
-            print "[ Train %s ] avg score: %.1f. elapsed: %.0fm. learning_rate=%.5f" % \
+            print "[ Train %s ] avg score: %.1f. elapsed: %.0fm. rl: %.5f" % \
                   (epoch, float(epoch_total_reward) / episode, 
                    (time.time() - epoch_start_time) / 60, learning_rate)
                 
@@ -658,14 +665,14 @@ global_step_no = 0
 def get_env(args, initialize, show_screen):
     if args.env == 'ale':
         from env.ale_env import AleEnv
-        env = AleEnv()
+        env = AleEnv(args.rom, show_screen, args.use_env_frame_skip, args.frame_repeat)
         if initialize:
-            env.initialize(args.rom, show_screen, args.use_env_frame_skip, args.frame_repeat)
+            env.initialize()
     elif args.env == 'vizdoom':
         from env.vizdoom_env import VizDoomEnv 
-        env = VizDoomEnv()
+        env = VizDoomEnv(args.config_file_path, show_screen, args.use_env_frame_skip, args.frame_repeat)
         if initialize:
-            env.initialize(args.config_file_path, show_screen, args.use_env_frame_skip, args.frame_repeat)
+            env.initialize()
     return env
 
 if __name__ == '__main__':
@@ -681,9 +688,9 @@ if __name__ == '__main__':
         
         # initialize global settings
         if args.drl == 'a3c':
-            model = ModelA3C(args.device, 'global', args.network, args.screen_height, args.screen_width, True,  len(legal_actions))
+            model = ModelA3C(args.device, 'global', args.network, args.screen_height, args.screen_width, args.screen_history, True,  len(legal_actions))
         elif args.drl == 'a3c_lstm':     
-            model = ModelA3CLstm(args.device, 'global', args.network, args.screen_height, args.screen_width, True,  len(legal_actions))
+            model = ModelA3CLstm(args.device, 'global', args.network, args.screen_height, args.screen_width, args.screen_history, True,  len(legal_actions))
 
         global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
         global_sess = global_list[0]

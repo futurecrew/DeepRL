@@ -2,21 +2,25 @@ import random
 from ale_python_interface import ALEInterface
 
 class AleEnv():
-    def __init__(self):
+    def __init__(self, rom, display_screen, use_env_frame_skip, frame_repeat):
         self.actions = None
+        self.rom = rom
+        self.display_screen = display_screen
+        self.use_env_frame_skip = use_env_frame_skip
+        self.frame_repeat = frame_repeat
         
-    def initialize(self, rom, display_screen=False, use_env_frame_skip=False, frame_repeat=0):
+    def initialize(self):
         self.ale = ALEInterface()
         self.ale.setInt("random_seed", random.randint(1, 1000))
-        if display_screen:
+        if self.display_screen:
             self.ale.setBool('display_screen', True)
 
-        if use_env_frame_skip == True:
-            self.ale.setInt('frame_skip', frame_repeat)
+        if self.use_env_frame_skip == True:
+            self.ale.setInt('frame_skip', self.frame_repeat)
             self.ale.setBool('color_averaging', True)        
  
         self.ale.setFloat('repeat_action_probability', 0)
-        self.ale.loadROM(rom)
+        self.ale.loadROM(self.rom)
         self.actions = self.ale.getMinimalActionSet()
         print 'actions: %s' % self.actions
         (self.screen_width,self.screen_height) = self.ale.getScreenDims()
