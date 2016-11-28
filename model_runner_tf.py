@@ -74,7 +74,7 @@ class ModelRunnerTF(object):
             elif reward < 0:
                 return -1
             else:
-                return 0
+                return reward
 
     def predict(self, history_buffer):
         return self.sess.run([self.y], {self.x_in: history_buffer})[0]

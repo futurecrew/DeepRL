@@ -141,7 +141,7 @@ class ModelRunnerTFAsync():
             elif reward < 0:
                 return -1
             else:
-                return 0
+                return reward
                         
     def load(self, fileName):
         self.saver.restore(self.sess, fileName)

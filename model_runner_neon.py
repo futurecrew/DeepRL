@@ -112,7 +112,7 @@ class ModelRunnerNeon():
             elif reward < 0:
                 return -1
             else:
-                return 0
+                return reward
 
     def set_input(self, data):
         if self.use_gpu_replay_mem:
