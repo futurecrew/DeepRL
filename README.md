@@ -37,10 +37,10 @@ python deep_rl_train.py /path/to/rom --drl a3c --multi-thread-no 8 --snapshot pa
 ex) python deep_rl_train.py ./rom/space_invaders.bin --drl a3c --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828
 ```
 
-## How to run
+## How to play
 ```
-python play.py /path/to/rom --snapshot path/to/snapshot_file --drl [drl_type]
-ex) python play.py ./rom/space_invaders.bin --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828 --drl a3c_lstm
+python play.py /path/to/rom --snapshot path/to/snapshot_file
+ex) python play.py ./rom/space_invaders.bin --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828
 ```
 
 ## Reference projects
