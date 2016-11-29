@@ -34,13 +34,13 @@ A3C LSTM   : python deep_rl_train.py /path/to/rom --drl a3c_lstm --multi-thread-
 ## How to retrain
 ```
 python deep_rl_train.py /path/to/rom --drl a3c --multi-thread-no 8 --snapshot path/to/snapshot_file
-ex) python deep_rl_train.py ./rom/space_invaders.bin --drl a3c --snapshot snapshot/space_invaders/20161114_003838/a3c_6250000
+ex) python deep_rl_train.py /rom/breakout.bin --drl a3c --snapshot snapshot/breakout/20161114_003838/a3c_6250000
 ```
 
 ## How to play
 ```
 python play.py /path/to/rom --snapshot path/to/snapshot_file
-ex) python play.py ./rom/space_invaders.bin --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828
+ex) python play.py /rom/space_invaders.bin --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828
 ```
 
 ## Reference projects
