@@ -1,6 +1,6 @@
 # DeepRL
 
-This is to implement deep reinforcement learning algorithms including following papers.
+This project implements deep reinforcement learning algorithms including following papers.
   - Deep Q Network (Human-level control through deep reinforcement learning) 
   - Deep Reinforcement Learning with Double Q-learning
   - Asynchronous Methods for Deep Reinforcement Learning
