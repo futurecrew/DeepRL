@@ -4,7 +4,7 @@ This is to implement deep reinforcement learning algorithms including following 
   - Deep Q Network (Human-level control through deep reinforcement learning) 
   - Deep Reinforcement Learning with Double Q-learning
   - Asynchronous Methods for Deep Reinforcement Learning
-  - Prioritized Experience Replay
+  - Prioritized Experience Replay (in working)
 
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="300">
 
@@ -21,8 +21,7 @@ In my PC (i7 CPU, Titan-X Maxwell),
   - Arcade-Learning-Environment
   - Tensorflow-1.0
   - cv2
-  - Vizdoom (optional)
-  - Neon (optional)
+  - Vizdoom (in working)
   
 ## How to train
 ```
