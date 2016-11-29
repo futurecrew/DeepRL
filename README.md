@@ -1,10 +1,10 @@
 # DeepRL
 
-This is to implement deep reinforcement learning algorithms including following papers.
+This project implements deep reinforcement learning algorithms including following papers.
   - Deep Q Network (Human-level control through deep reinforcement learning) 
   - Deep Reinforcement Learning with Double Q-learning
   - Asynchronous Methods for Deep Reinforcement Learning
-  - Prioritized Experience Replay
+  - Prioritized Experience Replay (in working)
 
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="300">
 
@@ -21,21 +21,26 @@ In my PC (i7 CPU, Titan-X Maxwell),
   - Arcade-Learning-Environment
   - Tensorflow-1.0
   - cv2
-  - Vizdoom (optional)
-  - Neon (optional)
+  - Vizdoom (in working)
   
 ## How to train
 ```
-DQN        : python deep_rl_train.py /path/to/rom --network nature --drl dqn
-Double DQN : python deep_rl_train.py /path/to/rom --network nature --drl double_dqn
-A3C FF     : python deep_rl_train.py /path/to/rom --network nips --drl a3c --multi-thread-no 8
-A3C LSTM   : python deep_rl_train.py /path/to/rom --network nips --drl a3c_lstm --multi-thread-no 8
+DQN        : python deep_rl_train.py /path/to/rom --drl dqn
+Double DQN : python deep_rl_train.py /path/to/rom --drl double_dqn
+A3C FF     : python deep_rl_train.py /path/to/rom --drl a3c --multi-thread-no 8
+A3C LSTM   : python deep_rl_train.py /path/to/rom --drl a3c_lstm --multi-thread-no 8
+```
+  
+## How to retrain
+```
+python deep_rl_train.py /path/to/rom --drl a3c --multi-thread-no 8 --snapshot path/to/snapshot_file
+ex) python deep_rl_train.py /rom/breakout.bin --drl a3c --snapshot snapshot/breakout/20161114_003838/a3c_6250000
 ```
 
-## How to run
+## How to play
 ```
-python play.py /path/to/rom --replay-file path/to/snapshot_file --drl [drl_type]
-ex) python play.py ./rom/space_invaders.bin --replay-file snapshot/space_invaders/20161114_003838/a3c_79993828 --drl a3c_lstm
+python play.py /path/to/rom --snapshot path/to/snapshot_file
+ex) python play.py /rom/space_invaders.bin --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828
 ```
 
 ## Reference projects
