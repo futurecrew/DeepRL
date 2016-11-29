@@ -16,9 +16,8 @@ def get_args():
     parser.add_argument('--multi-thread-no', type=int, default=1, help='Number of multiple threads for Asynchronous RL')
     parser.add_argument('--network', type=str, default='nips', choices=['nips', 'nature'], help='network model nature or nips') 
     parser.add_argument('--drl', type=str, default='dqn', choices=['dqn', 'double_dqn', 'prioritized_rank', 'prioritized_proportion', 'a3c_lstm', 'a3c', '1q'])
-    parser.add_argument('--retrain-file', type=str, default=None, help='trained file to resume training') 
-    parser.add_argument('--replay-file', type=str, default=None, help='trained file to replay') 
-    parser.add_argument('--device', type=str, default='', help='(gpu, cpu)')
+    parser.add_argument('--snapshot', type=str, default=None, help='trained file to resume training or to replay') 
+    parser.add_argument('--device', type=str, default='', help='gpu or cpu')
     parser.add_argument('--env', type=str, default='ale', choices=['ale', 'vizdoom'])
     parser.add_argument('--show-screen', action='store_true', help='whether to show display or not')
     parser.add_argument('--config-file-path', type=str, default=None, help='config file')
@@ -52,7 +51,7 @@ def get_args():
         args.max_replay_memory = 30
         args.max_epoch = 20
         args.epoch_step = 500000    # 4,000,000 global steps / 8 threads
-        args.train_start = 100        
+        args.train_start = 0        
         args.train_step = 5                 
         args.learning_rate = 0.0007                 # RL learning rate
         args.rms_decay = 0.99                 # rms decay
@@ -64,6 +63,30 @@ def get_args():
         args.save_step = 4000000            # save result every this training step
         args.prioritized_replay = False
         args.max_global_step_no = args.epoch_step * args.max_epoch * args.multi_thread_no
+
+        # DJDJ
+        if args.env == 'vizdoom':
+            args.screen_width = 45    # input screen width
+            args.screen_height = 30    # input screen height
+            #args.train_batch_size = 64
+            #args.learning_rate = 0.00025                 # RL learning rate
+            args.use_env_frame_skip = True
+            args.frame_repeat = 12
+            #args.train_step = 1                 # Train every this screen step
+            args.max_epoch = 20
+            args.epoch_step = 2000
+            args.max_replay_memory = 10000
+            args.train_start = 10        # start training after filling this replay memory size
+            args.test_step = 2000
+            args.train_epsilon_start_step = 6000    # start decreasing greedy epsilon from this train step 
+            args.train_epsilon_end_step = 24000    # end decreasing greedy epsilon from this train step 
+            args.screen_history = 1    # input screen history
+            args.test_epsilon = 0.0                    # greedy epsilon for test
+            args.rms_decay = 0.9                
+            args.rms_epsilon = 1e-10                   
+            args.use_random_action_on_reset = False
+            args.update_step = 100    # copy train network into target network every this train step
+        
     else:
         args.asynchronousRL = False
         args.train_batch_size = 32
@@ -127,7 +150,7 @@ def get_args():
             args.max_epoch = 20
             args.epoch_step = 2000
             args.max_replay_memory = 10000
-            args.train_start = 1        # start training after filling this replay memory size
+            args.train_start = 10        # start training after filling this replay memory size
             args.test_step = 2000
             args.train_epsilon_start_step = 6000    # start decreasing greedy epsilon from this train step 
             args.train_epsilon_end_step = 24000    # end decreasing greedy epsilon from this train step 

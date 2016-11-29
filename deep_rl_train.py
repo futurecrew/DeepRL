@@ -671,7 +671,7 @@ def get_env(args, initialize, show_screen):
 
 if __name__ == '__main__':
     args = get_args()
-    save_file = args.retrain_file
+    save_file = args.snapshot
 
     if args.asynchronousRL:
         threadList = []
