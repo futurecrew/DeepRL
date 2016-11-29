@@ -1,3 +1,4 @@
+import pickle
 from arguments import get_args
 from deep_rl_train import DeepRLPlayer
         
@@ -6,11 +7,15 @@ if __name__ == '__main__':
     if args.snapshot == None:
         print 'Usage: python player.py [path/to/rom/file] --snapshot [path/to/snapshot/file]'
         exit()
-    args.show_screen = True
     
     print 'Play using data_file: %s' % args.snapshot
-    player = DeepRLPlayer(args, args.snapshot)
-    player.model_runner.load(args.snapshot + '.weight')
-    player.debug = True
-    player.test(0)
+    with open(args.snapshot + '.pickle') as f:
+        player = pickle.load(f)
+        player.set_global_list(None)
+        player.args.show_screen = True
+        player.thread_no = 0
+        player.initialize_post()
+        player.model_runner.load(args.snapshot + '.weight')
+        player.debug = True
+        player.test(0)
     
