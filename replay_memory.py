@@ -137,9 +137,9 @@ class ReplayMemory:
         # if wraps over current pointer, then get new one
         assert (index >= self.current and index - self.history_length < self.current) == False
 
-        # if wraps over episode end, then get new one
-        # NB! poststate (last screen) can be terminal state!
-        assert self.terminals[(index - self.history_length):index].any() == False
+        if self.terminals[(index - self.history_length):index].any():
+            data_size_to_ret = i
+            break
         
         # NB! having index first is fastest in C-order matrices
         self.prestates[len(indexes), ...] = self.get_state(index - 1)

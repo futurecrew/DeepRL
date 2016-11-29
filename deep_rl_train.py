@@ -190,12 +190,6 @@ class DeepRLPlayer:
         else:
             action_values = self.model_runner.predict(state)
             action_index = self.choose_action(action_values)
-            """
-            if mode == 'TRAIN':
-                action_index = self.choose_action(action_values)
-            else:
-                action_index = np.argmax(action_values)
-            """
             return action_index, 0
                                                  
     def get_action_state_value(self, mode):
@@ -229,7 +223,7 @@ class DeepRLPlayer:
 
         if self.args.use_random_action_on_reset:
             for _ in range(random.randint(4, 30)):
-                reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
+                self.do_actions(action_index, 'TRAIN')
 
         first_state = self.resize_screen(self.env.getScreenGrayscale())
         for i in range(self.args.screen_history):
@@ -508,7 +502,7 @@ class DeepRLPlayer:
                     episode_total_reward += reward
                     epoch_total_reward += reward
     
-                    if game_over:
+                    if terminal:
                         break
                 
                 v_pres.reverse()
