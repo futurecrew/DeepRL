@@ -18,12 +18,16 @@ def get_args():
     parser.add_argument('--drl', type=str, default='dqn', choices=['dqn', 'double_dqn', 'prioritized_rank', 'prioritized_proportion', 'a3c_lstm', 'a3c', '1q'])
     parser.add_argument('--snapshot', type=str, default=None, help='trained file to resume training or to replay') 
     parser.add_argument('--device', type=str, default='', help='gpu or cpu')
-    parser.add_argument('--env', type=str, default='ale', choices=['ale', 'vizdoom'])
     parser.add_argument('--show-screen', action='store_true', help='whether to show display or not')
-    parser.add_argument('--config-file-path', type=str, default=None, help='config file')
+    parser.add_argument('--config', type=str, default=None, help='config file for vizdoom')
     parser.set_defaults(show_screen=False)
     
     args = parser.parse_args()
+    
+    if args.rom == 'vizdoom':
+        args.env = 'vizdoom'
+    else:
+        args.env = 'ale'
     
     args.game = get_game_name(args.rom)
     args.screen_width = 84    # input screen width
@@ -150,7 +154,7 @@ def get_args():
             args.max_epoch = 20
             args.epoch_step = 2000
             args.max_replay_memory = 10000
-            args.train_start = 10        # start training after filling this replay memory size
+            args.train_start = 0        # start training after filling this replay memory size
             args.test_step = 2000
             args.train_epsilon_start_step = 6000    # start decreasing greedy epsilon from this train step 
             args.train_epsilon_end_step = 24000    # end decreasing greedy epsilon from this train step 

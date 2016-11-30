@@ -4,12 +4,12 @@ import itertools as it
 from vizdoom import *
 
 class VizDoomEnv():
-    def __init__(self, config_file_path, display_screen, use_env_frame_skip, frame_repeat):
-        if config_file_path == None:
-            print 'Need to set vizdoom --config-file-path'
+    def __init__(self, config, display_screen, use_env_frame_skip, frame_repeat):
+        if config == None:
+            print 'Need to set vizdoom --config'
             exit()
         self.actions = None
-        self.config_file_path = config_file_path
+        self.config = config
         self.display_screen = display_screen
         if use_env_frame_skip == True:
             self.frame_repeat = frame_repeat
@@ -20,8 +20,8 @@ class VizDoomEnv():
         self.game = DoomGame()
         self.game.set_window_visible(self.display_screen)        
         
-        #self.config_file_path = "ViZDoom-master/examples/config/simpler_basic.cfg"
-        self.game.load_config(self.config_file_path)
+        #self.config = "ViZDoom-master/examples/config/simpler_basic.cfg"
+        self.game.load_config(self.config)
         self.game.set_mode(Mode.PLAYER)
         self.game.set_screen_format(ScreenFormat.GRAY8)
         #self.game.set_screen_resolution(ScreenResolution.RES_640X480)
@@ -37,7 +37,7 @@ class VizDoomEnv():
         if self.actions is None:
             game = DoomGame()
             game.set_window_visible(False)        
-            game.load_config(self.config_file_path)
+            game.load_config(self.config)
             game.set_screen_resolution(ScreenResolution.RES_160X120)
             game.init()
             self.actions = [list(a) for a in it.product([0, 1], repeat=game.get_available_buttons_size())]

@@ -47,15 +47,15 @@ class DeepRLPlayer:
         self.epoch_done = 0
         self.next_test_thread_no = 0
         self.train_start = time.strftime('%Y%m%d_%H%M%S')
-
-        if self.play_file is None and self.thread_no == 0:
-            log_file="output/%s_%s.log" % (args.game, self.train_start)            
-            util.Logger(log_file)
         
         if os.path.exists('output') == False:
             os.makedirs('output')
         if os.path.exists('snapshot') == False:
             os.makedirs('snapshot')
+
+        if self.play_file is None and self.thread_no == 0:
+            log_file="output/%s_%s.log" % (args.game, self.train_start)            
+            util.Logger(log_file)
             
         game_folder = self.args.rom.split('/')[-1]
         if '.' in game_folder:
@@ -664,7 +664,7 @@ def get_env(args, initialize, show_screen):
             env.initialize()
     elif args.env == 'vizdoom':
         from env.vizdoom_env import VizDoomEnv 
-        env = VizDoomEnv(args.config_file_path, show_screen, args.use_env_frame_skip, args.frame_repeat)
+        env = VizDoomEnv(args.config, show_screen, args.use_env_frame_skip, args.frame_repeat)
         if initialize:
             env.initialize()
     return env
