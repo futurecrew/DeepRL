@@ -13,7 +13,7 @@ def get_args():
     parser = argparse.ArgumentParser()    
     
     parser.add_argument('rom', type=str, help='ALE rom file')    
-    parser.add_argument('--multi-thread-no', type=int, default=1, help='Number of multiple threads for Asynchronous RL')
+    parser.add_argument('--thread-no', type=int, default=1, help='Number of multiple threads for Asynchronous RL')
     parser.add_argument('--network', type=str, default='nips', choices=['nips', 'nature'], help='network model nature or nips') 
     parser.add_argument('--drl', type=str, default='dqn', choices=['dqn', 'double_dqn', 'prioritized_rank', 'prioritized_proportion', 'a3c_lstm', 'a3c', '1q'])
     parser.add_argument('--snapshot', type=str, default=None, help='trained file to resume training or to replay') 
@@ -66,7 +66,7 @@ def get_args():
         args.minibatch_random = False       # whether to use random indexing or sequential indexing for minibatch
         args.save_step = 4000000            # save result every this training step
         args.prioritized_replay = False
-        args.max_global_step_no = args.epoch_step * args.max_epoch * args.multi_thread_no
+        args.max_global_step_no = args.epoch_step * args.max_epoch * args.thread_no
 
         # DJDJ
         if args.env == 'vizdoom':

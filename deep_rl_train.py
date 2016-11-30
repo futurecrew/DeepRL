@@ -442,7 +442,7 @@ class DeepRLPlayer:
                 else:
                     if self.thread_no == self.next_test_thread_no:
                         self.test(epoch)
-                    self.next_test_thread_no = (self.next_test_thread_no + 1) % self.args.multi_thread_no
+                    self.next_test_thread_no = (self.next_test_thread_no + 1) % self.args.thread_no
                     
             self.epoch_done = epoch
                         
@@ -464,7 +464,7 @@ class DeepRLPlayer:
         global debug_print
         global debug_pause
 
-        max_global_step_no = self.args.max_epoch * self.args.epoch_step * self.args.multi_thread_no
+        max_global_step_no = self.args.max_epoch * self.args.epoch_step * self.args.thread_no
         last_time = 0
         last_global_step_no = 0
         
@@ -574,7 +574,7 @@ class DeepRLPlayer:
                 else:
                     if self.thread_no == self.next_test_thread_no:
                         self.test(epoch)
-                    self.next_test_thread_no = (self.next_test_thread_no + 1) % self.args.multi_thread_no
+                    self.next_test_thread_no = (self.next_test_thread_no + 1) % self.args.thread_no
 
         print 'thread %s finished' % self.thread_no
 
@@ -696,7 +696,7 @@ if __name__ == '__main__':
             util.Logger(log_file)
             print 'Resume trainig: %s' % save_file
 
-            for i in range(args.multi_thread_no):        
+            for i in range(args.thread_no):        
                 with open(save_file + '.pickle') as f:
                     player = pickle.load(f)
                     player.train_start = current_time
@@ -722,10 +722,10 @@ if __name__ == '__main__':
             load_global_vars(global_sess, global_vars, save_file + '.weight')
             
             # copy global variables to local variables
-            for i in range(args.multi_thread_no):        
+            for i in range(args.thread_no):        
                 playerList[i].model_runner.copy_from_global_to_local()
         else:
-            for i in range(args.multi_thread_no):        
+            for i in range(args.thread_no):        
                 print 'creating a thread[%s]' % i
                 player = DeepRLPlayer(args, thread_no= i, global_list=global_list)
                 playerList.append(player)
