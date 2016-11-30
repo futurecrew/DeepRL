@@ -32,14 +32,14 @@ In my PC (i7 CPU, Titan-X Maxwell),
 ```
 DQN        : python deep_rl_train.py /path/to/rom --drl dqn
 Double DQN : python deep_rl_train.py /path/to/rom --drl double_dqn
-A3C FF     : python deep_rl_train.py /path/to/rom --drl a3c --multi-thread-no 8
-A3C LSTM   : python deep_rl_train.py /path/to/rom --drl a3c_lstm --multi-thread-no 8
+A3C FF     : python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8
+A3C LSTM   : python deep_rl_train.py /path/to/rom --drl a3c_lstm --thread-no 8
 ```
   
 ## How to retrain
 ```
-python deep_rl_train.py /path/to/rom --drl a3c --multi-thread-no 8 --snapshot path/to/snapshot_file
-ex) python deep_rl_train.py /rom/breakout.bin --drl a3c --snapshot snapshot/breakout/20161114_003838/a3c_6250000
+python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8 --snapshot path/to/snapshot_file
+ex) python deep_rl_train.py /rom/breakout.bin --drl a3c --thread-no 8 --snapshot snapshot/breakout/20161114_003838/a3c_6250000
 ```
 
 ## How to play
