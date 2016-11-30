@@ -7,10 +7,15 @@ This project implements deep reinforcement learning algorithms including followi
   - Prioritized Experience Replay (in working)
 
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="300">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.gif" width="300">
+
 
 
 ## Test scores
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="500">
+<nobr>
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="420">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.png" width="400">
+</nobr>
 
 In my PC (i7 CPU, Titan-X Maxwell),
   - A3C FF took 20 hours (4.00M global steps/hour)
