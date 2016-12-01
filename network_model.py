@@ -4,7 +4,7 @@ import math
 
 def new_session(graph=None):
     config = tf.ConfigProto()
-    #config.gpu_options.allow_growth = True
+    # Use 20% of GPU memory to prevent from using it all 
     config.gpu_options.per_process_gpu_memory_fraction = 0.2
     return tf.Session(config=config, graph=graph)
 
@@ -168,12 +168,14 @@ class ModelA3C(Model):
     
             h_conv3 = tf.nn.relu(tf.nn.conv2d(h_conv2, W_conv3, strides=[1, 1, 1, 1], padding='VALID') + b_conv3, name="h_conv3")
             print(h_conv3)
+            
+            conv_out_size = np.prod(h_conv3._shape[1:]).value
     
-            h_conv3_flat = tf.reshape(h_conv3, [-1, 7 * 7 * 64], name="h_conv3_flat")
+            h_conv3_flat = tf.reshape(h_conv3, [-1, conv_out_size], name="h_conv3_flat")
             print(h_conv3_flat)
     
             # Fifth layer is fully connected with 512 relu units
-            W_fc1, b_fc1 = self.make_layer_variables([7 * 7 * 64, 512], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 512], trainable, "fc1")
     
             h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat, W_fc1) + b_fc1, name="h_fc1")
             print(h_fc1)
@@ -210,12 +212,14 @@ class ModelA3C(Model):
     
             h_conv2 = tf.nn.relu(tf.nn.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2, name="h_conv2")
             print(h_conv2)
+
+            conv_out_size = np.prod(h_conv2._shape[1:]).value
     
-            h_conv2_flat = tf.reshape(h_conv2, [-1, 9 * 9 * 32], name="h_conv2_flat")
+            h_conv2_flat = tf.reshape(h_conv2, [-1, conv_out_size], name="h_conv2_flat")
             print(h_conv2_flat)
     
             # Fourth layer is fully connected with 256 relu units
-            W_fc1, b_fc1 = self.make_layer_variables([9 * 9 * 32, 256], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 256], trainable, "fc1")
     
             h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, W_fc1) + b_fc1, name="h_fc1")
             print(h_fc1)
@@ -268,11 +272,13 @@ class ModelA3CLstm(Model):
             h_conv3 = tf.nn.relu(tf.nn.conv2d(h_conv2, W_conv3, strides=[1, 1, 1, 1], padding='VALID') + b_conv3, name="h_conv3")
             print(h_conv3)
     
-            h_conv3_flat = tf.reshape(h_conv3, [-1, 7 * 7 * 64], name="h_conv3_flat")
+            conv_out_size = np.prod(h_conv3._shape[1:]).value
+    
+            h_conv3_flat = tf.reshape(h_conv3, [-1, conv_out_size], name="h_conv3_flat")
             print(h_conv3_flat)
     
             # Fifth layer is fully connected with 512 relu units
-            W_fc1, b_fc1 = self.make_layer_variables([7 * 7 * 64, 512], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 512], trainable, "fc1")
     
             h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat, W_fc1) + b_fc1, name="h_fc1")
             print(h_fc1)
