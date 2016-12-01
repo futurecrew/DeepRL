@@ -4,14 +4,12 @@
 import os
 import numpy as np
 import random
-import scipy.ndimage as ndimage
 import cv2
 import pickle
 import sys
 import threading
 import time
 import util
-import png
 from select import select
 from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
@@ -236,12 +234,6 @@ class DeepRLPlayer:
             else:
                 self.replay_memory.add_to_history_buffer(state)
     
-    def save_screen_as_png(self, file_name, screen):
-        pngfile = open(file_name, 'wb')
-        png_writer = png.Writer(screen.shape[1], screen.shape[0], greyscale=True)
-        png_writer.write(pngfile, screen)
-        pngfile.close()
-
     def resize_screen(self, state):
         resized = cv2.resize(state, (self.args.screen_width, self.args.screen_height))
         return resized
@@ -263,53 +255,34 @@ class DeepRLPlayer:
         lives = self.env.lives()
         frame_repeat = self.args.frame_repeat
 
-        if self.args.crop_image:        
-            state = self.env.getScreenRGB()
+        if self.args.use_env_frame_skip == True:
+            reward += self.env.act(action)
+            new_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
+            game_over = self.env.game_over()
+            if (self.args.lost_life_terminal == True and self.env.lives() < lives) or game_over:
+                terminal = True
+                if mode == 'TRAIN' and self.args.lost_life_game_over == True:
+                    game_over = True
+        else:
+            if self.current_state is None:
+                self.current_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)                
             for _ in range(frame_repeat):
-                prev_state = state
+                prev_state = self.current_state
                 reward += self.env.act(action)
-                state = self.env.getScreenRGB()
+                state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
+                if state is not None:
+                    self.current_state = state 
                 game_over = self.env.game_over()
                 if (self.args.lost_life_terminal == True and self.env.lives() < lives) or game_over:
                     terminal = True
                     if mode == 'TRAIN' and self.args.lost_life_game_over == True:
                         game_over = True
                     break
-            new_state = np.maximum(prev_state, state)
-            
-            screen = np.dot(new_state, np.array([.299, .587, .114])).astype(np.uint8)
-            screen = ndimage.zoom(screen, (0.4, 0.525))
-            screen.resize((self.args.screen_height, self.args.screen_width))
-            return reward, screen, terminal, game_over
-        else:
-            if self.args.use_env_frame_skip == True:
-                reward += self.env.act(action)
-                new_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
-                game_over = self.env.game_over()
-                if (self.args.lost_life_terminal == True and self.env.lives() < lives) or game_over:
-                    terminal = True
-                    if mode == 'TRAIN' and self.args.lost_life_game_over == True:
-                        game_over = True
-            else:
-                if self.current_state is None:
-                    self.current_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)                
-                for _ in range(frame_repeat):
-                    prev_state = self.current_state
-                    reward += self.env.act(action)
-                    state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
-                    if state is not None:
-                        self.current_state = state 
-                    game_over = self.env.game_over()
-                    if (self.args.lost_life_terminal == True and self.env.lives() < lives) or game_over:
-                        terminal = True
-                        if mode == 'TRAIN' and self.args.lost_life_game_over == True:
-                            game_over = True
-                        break
-                new_state = np.maximum(prev_state, self.current_state)
-            if new_state is None:
-                new_state = self.blank_screen
-            resized = self.resize_screen(new_state)
-            return reward, resized, terminal, game_over
+            new_state = np.maximum(prev_state, self.current_state)
+        if new_state is None:
+            new_state = self.blank_screen
+        resized = self.resize_screen(new_state)
+        return reward, resized, terminal, game_over
     
     def generate_replay_memory(self, count):
         if self.thread_no == 0:
@@ -355,7 +328,7 @@ class DeepRLPlayer:
                 total_reward += episode_reward
             
                 if debug_print:
-                    print "[ Test  %s ] score: %s, avg score: %.1f. ep: %d, elapsed: %.0fm. last e: %.3f" % \
+                    print "[ Test  %s ] score: %s, avg score: %.1f ep: %d, elapsed: %.0fm. last e: %.3f" % \
                           (epoch, episode_reward, float(total_reward) / episode, episode, 
                            (time.time() - test_start_time) / 60,
                            greedy_epsilon)
@@ -366,7 +339,7 @@ class DeepRLPlayer:
             self.check_pause()
         
         episode = max(episode, 1)          
-        print "[ Test  %s ] avg score: %.1f. elapsed: %.0fm. last e: %.3f" % \
+        print "[ Test  %s ] avg score: %.1f elapsed: %.0fm. last e: %.3f" % \
               (epoch, float(total_reward) / episode, 
                (time.time() - test_start_time) / 60,
                greedy_epsilon)
@@ -412,7 +385,7 @@ class DeepRLPlayer:
                         print_step = 500
                         
                     if episode % print_step == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train:%s, t_elapsed: %.0fm" % (
+                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f train:%s, t_elapsed: %.0fm" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
                                                                                 float(epoch_total_reward) / episode,
@@ -430,7 +403,7 @@ class DeepRLPlayer:
                 
                 self.check_pause()
                 
-            print "[ Train %s ] avg score: %.1f. elapsed: %.0fm. last e: %.3f, train:%s, t_elapsed: %.0fm" % \
+            print "[ Train %s ] avg score: %.1f elapsed: %.0fm. last e: %.3f, train:%s, t_elapsed: %.0fm" % \
                   (epoch, float(epoch_total_reward) / episode, 
                    (time.time() - epoch_start_time) / 60,
                    greedy_epsilon, self.train_step, (time.time() - start_time) / 60)
@@ -531,7 +504,7 @@ class DeepRLPlayer:
                         print_step = 500
                         
                     if episode % print_step == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f, train:%s, t_elapsed: %.0fm" % (
+                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f train:%s, t_elapsed: %.0fm" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
                                                                                 float(epoch_total_reward) / episode,
@@ -556,7 +529,7 @@ class DeepRLPlayer:
 
             self.epoch_done = epoch
 
-            print "[ Train %s ] avg score: %.1f. elapsed: %.0fm. rl: %.5f" % \
+            print "[ Train %s ] avg score: %.1f elapsed: %.0fm. rl: %.5f" % \
                   (epoch, float(epoch_total_reward) / episode, 
                    (time.time() - epoch_start_time) / 60, learning_rate)
                 
