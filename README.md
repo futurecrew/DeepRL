@@ -29,7 +29,7 @@ In my PC (i7 CPU, Titan-X Maxwell),
   - opencv2
   - Vizdoom (in working)
   <br><br>
-  See the <a href="INSTALL.md">this</a> for installation.
+  See <a href="INSTALL.md">this</a> for installation.
   
 ## How to train
 ```
