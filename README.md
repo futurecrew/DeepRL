@@ -23,10 +23,13 @@ In my PC (i7 CPU, Titan-X Maxwell),
 
 ## Requirements
   - Python-2.7
+  - Numpy
   - Arcade-Learning-Environment
-  - Tensorflow-1.0
-  - cv2
+  - Tensorflow-0.10
+  - opencv2
   - Vizdoom (in working)
+  
+  See the <a href="INSTALL.md">this</a> for installation.
   
 ## How to train
 ```
