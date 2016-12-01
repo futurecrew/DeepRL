@@ -51,6 +51,16 @@ python play.py /path/to/rom --snapshot path/to/snapshot_file
 ex) python play.py /rom/space_invaders.bin --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828
 ```
 
+## Debug console commands
+While training you can send several debug commands in the console.
+- p : print debug message or not
+- u : pause training or not
+- quit : finish training
+- d : display screen or not
+- - : make displaying faster
+- + : make displaying slower
+
+
 ## Reference projects
   - https://github.com/tambetm/simple_dqn
   - https://github.com/miyosuda/async_deep_reinforce
