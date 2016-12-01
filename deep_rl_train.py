@@ -285,6 +285,8 @@ class DeepRLPlayer:
         return reward, resized, terminal, game_over
     
     def generate_replay_memory(self, count):
+        global debug_quit
+        
         if self.thread_no == 0:
             print 'Generating %s replay memory' % count
         start_time = time.time()
@@ -294,8 +296,11 @@ class DeepRLPlayer:
             reward, state, terminal, game_over = self.do_actions(action_index, 'TRAIN')
             self.replay_memory.add(action_index, reward, state, terminal)
                 
-            if(game_over):
+            if game_over:
                 self.reset_game()
+
+            if debug_quit:
+                return
         
         if self.thread_no == 0:
             print 'Generating replay memory took %.0f sec' % (time.time() - start_time)
@@ -308,6 +313,7 @@ class DeepRLPlayer:
         
     def test(self, epoch):
         global debug_print
+        global debug_quit
         
         episode = 0
         total_reward = 0
@@ -337,6 +343,8 @@ class DeepRLPlayer:
                 episode_reward = 0
             
             self.check_pause()
+            if debug_quit:
+                return
         
         episode = max(episode, 1)          
         print "[ Test  %s ] avg score: %.1f elapsed: %.0fm. last e: %.3f" % \
@@ -345,6 +353,8 @@ class DeepRLPlayer:
                greedy_epsilon)
                   
     def train(self, replay_memory_no=None):
+        global debug_quit
+        
         if replay_memory_no == None:
             replay_memory_no = self.args.train_start
         if replay_memory_no > 0:
@@ -402,6 +412,8 @@ class DeepRLPlayer:
                     self.model_runner.update_model()
                 
                 self.check_pause()
+                if debug_quit:
+                    return
                 
             print "[ Train %s ] avg score: %.1f elapsed: %.0fm. last e: %.3f, train:%s, t_elapsed: %.0fm" % \
                   (epoch, float(epoch_total_reward) / episode, 
@@ -436,6 +448,7 @@ class DeepRLPlayer:
         global global_step_no
         global debug_print
         global debug_pause
+        global debug_quit
 
         max_global_step_no = self.args.max_epoch * self.args.epoch_step * self.args.thread_no
         last_time = 0
@@ -526,7 +539,9 @@ class DeepRLPlayer:
                             last_global_step_no = global_step_no
 
                 self.check_pause()
-
+                if debug_quit:
+                    return
+            
             self.epoch_done = epoch
 
             print "[ Train %s ] avg score: %.1f elapsed: %.0fm. rl: %.5f" % \
@@ -587,6 +602,7 @@ class DebugInput(threading.Thread):
         global debug_pause
         global debug_display
         global debug_display_sleep
+        global debug_quit
         
         time.sleep(10)
         while (self.running):
@@ -618,6 +634,10 @@ class DebugInput(threading.Thread):
                 debug_display_sleep += 20
                 debug_display_sleep = min(500, debug_display_sleep)
                 print 'Debug display_sleep : %s' % debug_display_sleep
+            elif key_input == 'quit':
+                print 'Finishing...'
+                debug_quit = True
+                break
                 
     def finish(self):
         self.running = False
@@ -626,6 +646,7 @@ debug_print = False
 debug_pause = False
 debug_display = False
 debug_display_sleep = 100
+debug_quit = False
 global_data = []
 global_step_no = 0
 
