@@ -21,9 +21,9 @@
 
 - tensorflow
   <br>
-  The project code is currently based on Tensorflow-0.10.
+  The project code is currently based on Tensorflow-0.11.
   <br>
-  https://www.tensorflow.org/versions/r0.10/get_started/os_setup.html#pip-installation
+  https://www.tensorflow.org/versions/r0.11/get_started/os_setup.html#pip-installation
   
 - ALE
   <br>
