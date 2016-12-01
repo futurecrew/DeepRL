@@ -25,7 +25,7 @@ In my PC (i7 CPU, Titan-X Maxwell),
   - Python-2.7
   - Numpy
   - Arcade-Learning-Environment
-  - Tensorflow-0.10
+  - Tensorflow-0.11
   - opencv2
   - Vizdoom (in working)
   <br><br>
