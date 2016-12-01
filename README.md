@@ -28,7 +28,7 @@ In my PC (i7 CPU, Titan-X Maxwell),
   - Tensorflow-0.10
   - opencv2
   - Vizdoom (in working)
-  
+  <br><br>
   See the <a href="INSTALL.md">this</a> for installation.
   
 ## How to train
