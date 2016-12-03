@@ -1,5 +1,5 @@
 import pickle
-from arguments import get_args
+from env.arguments import get_args
 from deep_rl_train import DeepRLPlayer
         
 if __name__ == '__main__':

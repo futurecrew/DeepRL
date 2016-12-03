@@ -115,15 +115,18 @@ class ModelRunnerTFAsync():
         
         for i in range(self.train_batch_size):
             self.action_mat[i, actions[i]] = 1
-            clipped_reward = self.clip_reward(rewards[i])
+            if self.args.clip_reward:
+                reward = self.clip_reward(rewards[i])
+            else:
+                reward = rewards[i]
             if terminals[i]:
-                y_[i] = clipped_reward
+                y_[i] = reward
             else:
                 if self.args.double_dqn == True:
                     max_index = np.argmax(y3[i])
-                    y_[i] = clipped_reward + self.discount_factor * y2[i][max_index]
+                    y_[i] = reward + self.discount_factor * y2[i][max_index]
                 else:
-                    y_[i] = clipped_reward + self.discount_factor * np.max(y2[i])
+                    y_[i] = reward + self.discount_factor * np.max(y2[i])
 
         self.sess.run(self.train_step, feed_dict={
             self.x_in: prestates,

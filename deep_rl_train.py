@@ -18,7 +18,7 @@ from model_runner_tf_a3c_lstm import ModelRunnerTFA3CLstm
 from model_runner_tf_async import ModelRunnerTFAsync, load_global_vars
 from model_runner_tf import ModelRunnerTF
 from network_model import ModelA3C, ModelA3CLstm
-from arguments import get_args
+from env.arguments import get_args
 import util
 
 class DeepRLPlayer:
@@ -120,7 +120,8 @@ class DeepRLPlayer:
                 self.model_runner = ModelRunnerTF(
                                     self.args, 
                                     max_action_no = len(self.legal_actions),
-                                    batch_dimension = self.batch_dimension
+                                    batch_dimension = self.batch_dimension,
+                                    thread_no = self.thread_no
                                     )
         else:
             print "args.backend should be NEON or TF."
@@ -551,9 +552,11 @@ class DeepRLPlayer:
             if self.thread_no == 0:
                 file_name = 'a3c_%s' % global_step_no
                 self.save(file_name)
+            """
             elif global_step_no >= self.args.max_global_step_no:
                 file_name = 'a3c_%s' % self.args.max_global_step_no
                 self.save(file_name)
+            """
              
             # Test once every epoch
             if args.run_test == True:
@@ -635,7 +638,7 @@ class DebugInput(threading.Thread):
                 debug_display_sleep = min(500, debug_display_sleep)
                 print 'Debug display_sleep : %s' % debug_display_sleep
             elif key_input == 'quit':
-                print 'Finishing...'
+                print 'Finishing training...'
                 debug_quit = True
                 break
                 
@@ -676,9 +679,9 @@ if __name__ == '__main__':
         
         # initialize global settings
         if args.drl == 'a3c':
-            model = ModelA3C(args.device, 'global', args.network, args.screen_height, args.screen_width, args.screen_history, True,  len(legal_actions))
+            model = ModelA3C(args, 'global', True,  len(legal_actions), thread_no = -1)
         elif args.drl == 'a3c_lstm':     
-            model = ModelA3CLstm(args.device, 'global', args.network, args.screen_height, args.screen_width, args.screen_history, True,  len(legal_actions))
+            model = ModelA3CLstm(args, 'global', True,  len(legal_actions), thread_no = -1)
 
         global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
         global_sess = global_list[0]

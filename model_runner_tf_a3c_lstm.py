@@ -31,7 +31,7 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
             self.init_gradients(loss, self.model.get_vars())
         
     def new_model(self, name):
-        return ModelA3CLstm(self.args.device, name, self.network, self.screen_height, self.screen_width, self.args.screen_history, True, self.max_action_no)
+        return ModelA3CLstm(self.args, name, True, self.max_action_no, self.thread_no)
     
     def get_loss(self):
         with tf.device(self.args.device):
@@ -125,8 +125,11 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
         R = v_post
         for i in range(data_len):
             action_mat[i, actions[i]] = 1
-            clipped_reward = self.clip_reward(rewards[i])
-            v_in[i] = clipped_reward + self.discount_factor * R
+            if self.args.clip_reward:
+                reward = self.clip_reward(rewards[i])
+            else:
+                reward = rewards[i]
+            v_in[i] = reward + self.discount_factor * R
             td_in[i] = v_in[i] - v_pres[i]
             R = v_in[i]
 

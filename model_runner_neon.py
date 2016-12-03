@@ -147,14 +147,18 @@ class ModelRunnerNeon():
         
         label = pre_qvalue.asnumpyarray().copy()
         for i in range(0, self.train_batch_size):
+            if self.args.clip_reward:
+                reward = self.clip_reward(rewards[i])
+            else:
+                reward = rewards[i]
             if terminals[i]:
-                label[actions[i], i] = self.clip_reward(rewards[i])
+                label[actions[i], i] = reward
             else:
                 if self.args.double_dqn == True:
                     max_index = np.argmax(post_qvalue2[i])
-                    label[actions[i], i] = self.clip_reward(rewards[i]) + self.discount_factor* post_qvalue[i][max_index]
+                    label[actions[i], i] = reward + self.discount_factor* post_qvalue[i][max_index]
                 else:
-                    label[actions[i], i] = self.clip_reward(rewards[i]) + self.discount_factor* np.max(post_qvalue[i])
+                    label[actions[i], i] = reward + self.discount_factor* np.max(post_qvalue[i])
 
         # copy targets to GPU memory
         self.targets.set(label)
@@ -173,7 +177,8 @@ class ModelRunnerNeon():
             #delta_value2 = delta.asnumpyarray()
             #pass
           
-        self.be.clip(delta, -1.0, 1.0, out = delta)
+        if self.clip_loss:
+            self.be.clip(delta, -1.0, 1.0, out = delta)
                 
         self.train_net.bprop(delta)
         self.optimizer.optimize(self.train_net.layers_to_optimize, epoch=0)

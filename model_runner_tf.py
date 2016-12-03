@@ -30,8 +30,8 @@ class ModelRunnerTF(object):
 
     def init_models(self, network, max_action_no, learning_rate, rms_decay, rms_epsilon):        
         with tf.device(self.args.device):
-            model_policy = Model(self.args.device, "policy", network, self.args.screen_height, self.args.screen_width, self.args.screen_history, True, max_action_no)
-            model_target = Model(self.args.device, "target", network, self.args.screen_height, self.args.screen_width, self.args.screen_history, False, max_action_no)
+            model_policy = Model(self.args, "policy", True, max_action_no)
+            model_target = Model(self.args, "target", False, max_action_no)
     
             self.x_in, self.y, self.var_train = model_policy.x, model_policy.y, model_policy.variables
             self.x_target, self.y_target, self.var_target = model_target.x, model_target.y, model_target.variables
@@ -51,7 +51,11 @@ class ModelRunnerTF(object):
     
             optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=rms_decay, epsilon=rms_epsilon)
             self.difference = tf.abs(self.y_a - self.y_)
-            quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
+            
+            if self.args.clip_loss:
+                quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
+            else:
+                quadratic_part = self.difference
             linear_part = self.difference - quadratic_part
             self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
                     
@@ -99,15 +103,18 @@ class ModelRunnerTF(object):
         
         for i in range(self.train_batch_size):
             self.action_mat[i, actions[i]] = 1
-            clipped_reward = self.clip_reward(rewards[i])
+            if self.args.clip_reward:
+                reward = self.clip_reward(rewards[i])
+            else:
+                reward = rewards[i]
             if terminals[i]:
-                y_[i] = clipped_reward
+                y_[i] = reward
             else:
                 if self.args.double_dqn == True:
                     max_index = np.argmax(y3[i])
-                    y_[i] = clipped_reward + self.discount_factor * y2[i][max_index]
+                    y_[i] = reward + self.discount_factor * y2[i][max_index]
                 else:
-                    y_[i] = clipped_reward + self.discount_factor * np.max(y2[i])
+                    y_[i] = reward + self.discount_factor * np.max(y2[i])
 
         if self.args.prioritized_replay == True:
             delta_value, _, y_a = self.sess.run([self.difference, self.train_step, self.y_a], feed_dict={
