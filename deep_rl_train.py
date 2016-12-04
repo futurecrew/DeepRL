@@ -335,7 +335,7 @@ class DeepRLPlayer:
                 total_reward += episode_reward
             
                 if debug_print:
-                    print "[ Test  %s ] score: %s, avg score: %.1f ep: %d, elapsed: %.0fm. last e: %.3f" % \
+                    print "[ Test  %s ] score: %.1f, avg score: %.1f ep: %d, elapsed: %.0fm. last e: %.3f" % \
                           (epoch, episode_reward, float(total_reward) / episode, episode, 
                            (time.time() - test_start_time) / 60,
                            greedy_epsilon)
@@ -396,7 +396,7 @@ class DeepRLPlayer:
                         print_step = 500
                         
                     if episode % print_step == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f train:%s, t_elapsed: %.0fm" % (
+                        print "Ep %s, score: %.1f, step: %s, elapsed: %.1fs, avg: %.1f train:%s, t_elapsed: %.0fm" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
                                                                                 float(epoch_total_reward) / episode,
@@ -518,7 +518,7 @@ class DeepRLPlayer:
                         print_step = 500
                         
                     if episode % print_step == 0:
-                        print "Ep %s, score: %s, step: %s, elapsed: %.1fs, avg: %.1f train:%s, t_elapsed: %.0fm" % (
+                        print "Ep %s, score: %.1f, step: %s, elapsed: %.1fs, avg: %.1f train:%s, t_elapsed: %.0fm" % (
                                                                                 episode, episode_total_reward,
                                                                                 step_no, (time.time() - episode_start_time),
                                                                                 float(epoch_total_reward) / episode,
