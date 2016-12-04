@@ -1,5 +1,6 @@
 import numpy as np
 import cv2
+import time
 import copy
 import itertools as it
 from vizdoom import *
@@ -28,7 +29,7 @@ class VizDoomEnv():
         self.game.init()
         
         self.actions = self.get_action_list(self.game)
-        #print 'actions: %s' % self.actions
+        print 'actions no: %s' % len(self.actions)
         
     def get_actions(self, rom=None):
         if self.actions is None:
@@ -42,20 +43,25 @@ class VizDoomEnv():
         return self.actions
         
     def get_action_list(self, game):
-        # DJDJ
         available_buttons_size = game.get_available_buttons_size()
-        return [list(a) for a in it.product([0, 1], repeat=available_buttons_size)]
-        """
-        action_no = game.get_available_buttons_size()
+
+        # get each action
         actions = []
-        null_action = [0] * action_no
+        null_action = [0] * available_buttons_size
         actions.append(null_action)
-        for i in range(action_no):
+        for i in range(available_buttons_size):
             action = copy.deepcopy(null_action)
             action[i] = 1
             actions.append(action)
+        
+        # get 2 combinations of actions
+        for action_index in it.combinations(range(available_buttons_size), 2):
+            action = copy.copy(null_action)
+            for index in action_index:
+                action[index] = 1 
+            actions.append(action)
+    
         return actions
-        """
         
     def reset_game(self):
         self.game.new_episode()

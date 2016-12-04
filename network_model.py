@@ -4,8 +4,8 @@ import math
 
 def new_session(graph=None):
     config = tf.ConfigProto()
-    # Use 30% of GPU memory to prevent from using it all 
-    config.gpu_options.per_process_gpu_memory_fraction = 0.3
+    # Use 25% of GPU memory to prevent from using it all 
+    config.gpu_options.per_process_gpu_memory_fraction = 0.25
     return tf.Session(config=config, graph=graph)
 
 class Model(object):

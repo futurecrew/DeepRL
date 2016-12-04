@@ -35,33 +35,6 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
     
     def get_loss(self):
         with tf.device(self.args.device):
-            """
-            y_class_a = tf.reduce_sum(tf.mul(self.y_class, self.a_in), reduction_indices=1)
-            self.log_y = tf.log(y_class_a)
-            class_loss = -1 * tf.reduce_sum(self.log_y * self.td_in)  
-            value_loss = tf.reduce_sum(tf.square(self.v - self.v_in))
-            """
-    
-            print 'self.y_class : %s' % self.y_class
-            print 'self.a_in : %s' % self.a_in
-            print 'self.td_in : %s' % self.td_in
-            print 'self.v : %s' % self.v
-            print 'self.v_in : %s' % self.v_in
-            
-            """
-            self.y_class_sequence = self.y_class[:self.sequence_length, :]
-            self.a_in_sequence = self.a_in[:self.sequence_length, :]
-            self.td_in_sequence = self.td_in[:self.sequence_length]
-            self.v_sequence = self.v[:self.sequence_length]
-            self.v_in_sequence = self.v_in[:self.sequence_length]
-    
-            print 'self.y_class_sequence : %s' % self.y_class_sequence
-            print 'self.a_in_sequence : %s' % self.a_in_sequence
-            print 'self.td_in_sequence : %s' % self.td_in_sequence
-            print 'self.v_sequence : %s' % self.v_sequence
-            print 'self.v_in_sequence : %s' % self.v_in_sequence
-            """
-            
             # avoid NaN with clipping when value in pi becomes zero
             log_pi = tf.log(tf.clip_by_value(self.y_class, 1e-20, 1.0))
       

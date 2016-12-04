@@ -11,6 +11,7 @@ from network_model import ModelA3C
 class ModelRunnerTFA3C(ModelRunnerTFAsync):
     def init_models(self):
         self.model = self.new_model('net-' + str(self.thread_no))
+        self.action_mat = np.zeros((self.args.train_batch_size, self.max_action_no), dtype=np.uint8)
 
         with tf.device(self.args.device):
             self.a_in = tf.placeholder(tf.float32, shape=[None, self.max_action_no])
@@ -28,13 +29,6 @@ class ModelRunnerTFA3C(ModelRunnerTFAsync):
     
     def get_loss(self):
         with tf.device(self.args.device):
-            """
-            y_class_a = tf.reduce_sum(tf.mul(self.y_class, self.a_in), reduction_indices=1)
-            self.log_y = tf.log(y_class_a)
-            class_loss = -1 * tf.reduce_sum(self.log_y * self.td_in)  
-            value_loss = tf.reduce_sum(tf.square(self.v - self.v_in))
-            """
-    
             # avoid NaN with clipping when value in pi becomes zero
             log_pi = tf.log(tf.clip_by_value(self.y_class, 1e-20, 1.0))
       
@@ -63,7 +57,8 @@ class ModelRunnerTFA3C(ModelRunnerTFAsync):
     def train(self, prestates, v_pres, actions, rewards, terminals, v_post, learning_rate):
         data_len = len(actions)
 
-        action_mat = np.zeros((data_len, self.max_action_no), dtype=np.uint8)
+        action_mat = self.action_mat[:data_len, :]
+        action_mat.fill(0)
         v_in = np.zeros(data_len)
         td_in = np.zeros(data_len)
         
