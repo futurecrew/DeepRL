@@ -12,7 +12,7 @@ class ReplayMemory:
     self.screen_order = screen_order
     # preallocate memory
     self.actions = np.empty(self.size, dtype = np.uint8)
-    self.rewards = np.empty(self.size, dtype = np.integer)
+    self.rewards = np.empty(self.size, dtype = np.float32)
     if self.screen_order == 'hws':        # (height, width, size)
         screen_dim = (height, width, self.size)
         state_dim = (batch_size, height, width, history_length)
@@ -20,7 +20,8 @@ class ReplayMemory:
     else:       # (size, height, width)
         screen_dim = (self.size, height, width)
         state_dim = (batch_size, history_length, height, width)
-        self.history_buffer = np.zeros((1, history_length, height, width), dtype=np.float32)
+        # Use batch_size instead of 1 to support NEON which requires batch size for network input
+        self.history_buffer = np.zeros((batch_size, history_length, height, width), dtype=np.float32)
     self.screens = np.empty(screen_dim, dtype = np.uint8)
     self.terminals = np.empty(self.size, dtype = np.bool)
     self.history_length = history_length
@@ -157,8 +158,12 @@ class ReplayMemory:
     return self.prestates[:data_size_to_ret, ...], actions, rewards, self.poststates[:data_size_to_ret, ...], terminals
 
   def add_to_history_buffer(self, state):
-        self.history_buffer[0, :, :, :-1] = self.history_buffer[0, :, :, 1:]
-        self.history_buffer[0, :, :, -1] = state
+      if self.screen_order == 'hws':        # (height, width, size)
+          self.history_buffer[0, :, :, :-1] = self.history_buffer[0, :, :, 1:]
+          self.history_buffer[0, :, :, -1] = state
+      else:         # (size, height, width)
+          self.history_buffer[0, :-1, :, :] = self.history_buffer[0, 1:, :, :]
+          self.history_buffer[0, -1, :, :] = state
 
   def clear_history_buffer(self):
         self.history_buffer.fill(0)

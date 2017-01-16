@@ -264,4 +264,14 @@ class SamplingManager:
         terminals = self.replay_memory.terminals[indexes]
         return self.replay_memory.prestates, actions, rewards, self.replay_memory.poststates, terminals, indexes, heap_indexes, weights
 
+    @property
+    def history_buffer(self):
+        return self.replay_memory.history_buffer
+    
+    def add_to_history_buffer(self, state):
+        self.replay_memory.add_to_history_buffer(state)
+
+    def clear_history_buffer(self):
+        self.replay_memory.clear_history_buffer()
+
         

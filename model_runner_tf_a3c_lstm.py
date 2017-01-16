@@ -6,7 +6,7 @@ import time
 import threading
 import tensorflow as tf
 from model_runner_tf_async import ModelRunnerTFAsync
-from network_model import ModelA3CLstm
+from network_model.model_a3c_lstm import ModelA3CLstm
             
 class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
     def init_models(self):

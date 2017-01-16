@@ -7,7 +7,7 @@ import threading
 import traceback
 import pickle
 import tensorflow as tf
-from network_model import Model, new_session
+from network_model.model import Model, new_session
 
 class ModelRunnerTF(object):
     def __init__(self, args,  max_action_no, batch_dimension, thread_no):
@@ -18,7 +18,6 @@ class ModelRunnerTF(object):
         self.network = args.network
         self.thread_no = thread_no
         
-        self.step_no = 0
         self.train_batch_size = args.train_batch_size
         self.discount_factor = args.discount_factor
         self.max_action_no = max_action_no
@@ -43,56 +42,53 @@ class ModelRunnerTF(object):
                 self.update_target.append(self.var_target[i].assign(self.var_train[i]))
     
             self.a_in = tf.placeholder(tf.float32, shape=[None, max_action_no])
-            print('a %s' % (self.a_in.get_shape()))
             self.y_ = tf.placeholder(tf.float32, [None])
-            print('y_ %s' % (self.y_.get_shape()))
-    
             self.y_a = tf.reduce_sum(tf.mul(self.y, self.a_in), reduction_indices=1)
-            print('y_a %s' % (self.y_a.get_shape()))
     
             optimizer = tf.train.RMSPropOptimizer(learning_rate, decay=rms_decay, epsilon=rms_epsilon)
             self.difference = tf.abs(self.y_a - self.y_)
-            
-            if self.args.clip_loss:
-                quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
-            else:
-                quadratic_part = self.difference
-            linear_part = self.difference - quadratic_part
-            self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
-                    
+
             if self.args.prioritized_replay == True:
-                self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
-                self.errors2 = tf.mul(self.errors, self.priority_weight)
+                self.priority_weight = tf.placeholder(tf.float32, shape=[None], name="priority_weight")
             else:
-                self.errors2 = self.errors
-            self.loss = tf.reduce_sum(self.errors2)
-            self.train_step = optimizer.minimize(self.loss)
-            self.saver = tf.train.Saver(max_to_keep=25)
+                self.priority_weight = None
+                
+            self.loss = 0.5 * tf.square(self.difference)
+                
+            gvs = optimizer.compute_gradients(self.loss, var_list=self.var_train, grad_loss=self.priority_weight)
+            new_gvs = [(tf.clip_by_value(grad, -1, 1), var) for grad, var in gvs]
+            self.train_step = optimizer.apply_gradients(new_gvs)
+            
+            self.saver = tf.train.Saver(max_to_keep=100)
     
             # Initialize variables
             self.sess.run(tf.initialize_all_variables())
             self.sess.run(self.update_target) # is this necessary?
 
     def clip_reward(self, reward):
-            if reward > 0:
-                return 1
-            elif reward < 0:
-                return -1
-            else:
-                return reward
+        if reward > self.args.clip_reward_high:
+            return self.args.clip_reward_high
+        elif reward < self.args.clip_reward_low:
+            return self.args.clip_reward_low
+        else:
+            return reward
 
     def predict(self, history_buffer):
         return self.sess.run([self.y], {self.x_in: history_buffer})[0]
+    
+    def print_weights(self):
+        for var in self.var_train:
+            print ''
+            print '[ ' + var.name + ']'
+            print self.sess.run(var)
         
-    def train(self, minibatch, replay_memory, debug):
+    def train(self, minibatch, replay_memory, learning_rate, debug):
         global global_step_no
 
         if self.args.prioritized_replay == True:
             prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
         else:
             prestates, actions, rewards, poststates, terminals = minibatch
-        
-        self.step_no += 1
         
         y2 = self.y_target.eval(feed_dict={self.x_target: poststates}, session=self.sess)
         

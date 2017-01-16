@@ -45,7 +45,12 @@ class AleEnv():
         return self.ale.getScreenRGB()
     
     def getScreenGrayscale(self, debug_display=False, debug_display_sleep=0):
-        return self.ale.getScreenGrayscale()
+        screen = self.ale.getScreenGrayscale()
+        if screen is not None and debug_display:
+            import cv2
+            cv2.imshow('image', screen)
+            cv2.waitKey(debug_display_sleep)
+        return screen
     
     def act(self, action):
         return self.ale.act(action)
@@ -53,6 +58,8 @@ class AleEnv():
     def game_over(self):
         return self.ale.game_over()
     
+    def finish(self):
+        return    
     
 def initialize_args(args):
     args.screen_width = 84    # input screen width
@@ -66,9 +73,11 @@ def initialize_args(args):
     args.crop_image = False         # Crop input image or zoom image
     args.run_test = True    # Whether to run test
     args.clip_reward = True
+    args.clip_reward_high = 1
+    args.clip_reward_low = -1
     args.clip_loss = True
 
-    args.backend = 'TF'    # Deep learning library backend (TF, NEON)    
+    args.backend = 'TF'    # Deep learning library backend (TF, NEON)
     if args.backend == 'TF':
         args.screen_order = 'hws'   # dimension order in replay memory (height, width, screen)
     elif args.backend == 'NEON':
@@ -76,7 +85,7 @@ def initialize_args(args):
         args.dnn_initializer = 'fan_in'    # 
         args.use_gpu_replay_mem = False       # Whether to store replay memory in gpu or not to speed up leraning        
     
-    if args.drl in ['a3c_lstm', 'a3c', '1q']:
+    if args.drl in ['a3c_lstm', 'a3c']:
         args.asynchronousRL = True
         args.train_batch_size = 5
         args.max_replay_memory = 30
@@ -94,6 +103,31 @@ def initialize_args(args):
         args.save_step = 4000000            # save result every this training step
         args.prioritized_replay = False
         args.max_global_step_no = args.epoch_step * args.max_epoch * args.thread_no
+    elif args.drl in ['1q']:
+        args.asynchronousRL = True
+        args.max_replay_memory = 10000
+        args.max_epoch = 20
+        args.train_start = 100           # start training after filling this replay memory size
+        args.epoch_step = 500000
+        args.train_step = 5
+        args.train_batch_size = 5
+        args.train_epsilon_start_step = 0    # start decreasing greedy epsilon from this train step 
+        args.train_epsilon_end_step = 100000    # end decreasing greedy epsilon from this train step 
+        args.learning_rate = 0.0007
+        args.rms_decay = 0.95                
+        args.rms_epsilon = 0.01                 
+        args.choose_max_action = True
+        args.lost_life_game_over = False    # whether to regard lost life as game over
+        args.lost_life_terminal = True    # whether to regard lost life as terminal state
+        args.minibatch_random = False       # whether to use random indexing or sequential indexing for minibatch
+        args.train_min_epsilon = 0.1    # minimum greedy epsilon value for exloration
+        args.update_step = 10000    # copy train network into target network every this train step
+        args.save_step = 50000            # save result every this training step
+        args.prioritized_replay = False
+        args.max_global_step_no = args.epoch_step * args.max_epoch * args.thread_no
+        args.double_dqn = False                   # whether to use double dqn
+        args.test_epsilon = 0.05                    # greedy epsilon for test
+        args.prioritized_replay = False
     else:
         args.asynchronousRL = False
         args.train_batch_size = 32
@@ -128,7 +162,8 @@ def initialize_args(args):
             args.prioritized_replay = False 
         elif args.drl == 'prioritized_rank':    # Prioritized experience replay params for RANK
             args.prioritized_replay = True    # 
-            args.learning_rate = 0.00025 / 4    # 
+            args.learning_rate = 0.00025 / 4    #
+            args.test_epsilon = 0.001    # 
             args.prioritized_mode = 'RANK'    # 
             args.sampling_alpha = 0.7    # 
             args.sampling_beta = 0.5    # 
@@ -138,6 +173,7 @@ def initialize_args(args):
         elif args.drl == 'prioritized_proportion':    # Prioritized experience replay params for PROPORTION
             args.prioritized_replay = True    # 
             args.learning_rate = 0.00025 / 4    # 
+            args.test_epsilon = 0.001    # 
             args.prioritized_mode = 'PROPORTION'    # 
             args.sampling_alpha = 0.6    # 
             args.sampling_beta = 0.4    # 

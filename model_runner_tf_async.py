@@ -5,7 +5,7 @@ import math
 import time
 import threading
 import tensorflow as tf
-from network_model import new_session
+from network_model.model import Model, new_session
 
 class ModelRunnerTFAsync():
     def __init__(self, global_list, args, max_action_no, thread_no):
@@ -30,27 +30,31 @@ class ModelRunnerTFAsync():
         self.init_models()
 
         if self.thread_no == 0:
-            self.saver = tf.train.Saver()
+            self.saver = tf.train.Saver(max_to_keep=100)
         
     def init_models(self):
         with tf.device(self.args.device):
-            self.x_in, self.y, self.var_train = self.build_network('policy', self.network, True, self.max_action_no)
-            self.x_target, self.y_target, self.var_target = self.build_network('target', self.network, False, self.max_action_no)
+            self.model_policy = Model(self.args, "policy", True, self.max_action_no, self.thread_no)
+            self.model_target = Model(self.args, "target", False, self.max_action_no, self.thread_no)
+    
+            self.x_in, self.y, self.var_train = self.model_policy.x, self.model_policy.y, self.model_policy.variables
+            self.x_target, self.y_target, self.var_target = self.model_target.x, self.model_target.y, self.model_target.variables
+
+            # build the variable copy ops
+            self.update_target = []
+            for i in range(0, len(self.var_target)):
+                self.update_target.append(self.var_target[i].assign(self.var_train[i]))
     
             self.a_in = tf.placeholder(tf.float32, shape=[None, self.max_action_no])
-            print('a_in %s' % (self.a_in.get_shape()))
             self.y_ = tf.placeholder(tf.float32, [None])
-            print('y_ %s' % (self.y_.get_shape()))
-    
             self.y_a = tf.reduce_sum(tf.mul(self.y, self.a_in), reduction_indices=1)
-            print('y_a %s' % (self.y_a.get_shape()))
     
             self.difference = tf.abs(self.y_a - self.y_)
             self.errors = 0.5 * tf.square(self.difference)
             self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
             loss = tf.reduce_sum(self.errors)
             
-            self.init_gradients(loss)
+            self.init_gradients(loss, self.var_train)
             self.sess.run(tf.initialize_all_variables())
 
     def init_gradients(self, loss, var_train):
@@ -97,24 +101,41 @@ class ModelRunnerTFAsync():
                 sync_list.append(self.save_vars[i].assign(self.global_vars[i]))
             self.save_sync = tf.group(*sync_list)
         
-    def train(self, minibatch, replay_memory, debug):
+    def clip_reward(self, reward):
+        if reward > self.args.clip_reward_high:
+            return self.args.clip_reward_high
+        elif reward < self.args.clip_reward_low:
+            return self.args.clip_reward_low
+        else:
+            return reward
+
+    def predict(self, history_buffer):
+        return self.sess.run([self.y], {self.x_in: history_buffer})[0]
+    
+    def print_weights(self):
+        for var in self.model_policy.get_vars():
+            print ''
+            print '[ ' + var.name + ']'
+            print self.sess.run(var)
+        
+    def train(self, minibatch, replay_memory, learning_rate, debug):
         if self.args.prioritized_replay == True:
             prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
         else:
             prestates, actions, rewards, poststates, terminals = minibatch
-        
-        self.step_no += 1
         
         y2 = self.y_target.eval(feed_dict={self.x_target: poststates}, session=self.sess)
         
         if self.args.double_dqn == True:
             y3 = self.y.eval(feed_dict={self.x_in: poststates}, session=self.sess)
 
-        self.action_mat.fill(0)
-        y_ = np.zeros(self.train_batch_size)
+        data_len = len(actions)
         
-        for i in range(self.train_batch_size):
-            self.action_mat[i, actions[i]] = 1
+        action_mat = np.zeros((data_len, self.max_action_no), dtype=np.uint8)
+        y_ = np.zeros(data_len)
+        
+        for i in range(data_len):
+            action_mat[i, actions[i]] = 1
             if self.args.clip_reward:
                 reward = self.clip_reward(rewards[i])
             else:
@@ -130,21 +151,16 @@ class ModelRunnerTFAsync():
 
         self.sess.run(self.train_step, feed_dict={
             self.x_in: prestates,
-            self.a_in: self.action_mat,
+            self.a_in: action_mat,
             self.y_: y_
         })
 
-        self.sess.run(self.apply_grads)
+        self.sess.run(self.apply_grads, feed_dict={ self.global_learning_rate : learning_rate })
         self.sess.run(self.reset_acc_gradients)
         self.sess.run(self.sync)
 
-    def clip_reward(self, reward):
-            if reward > 0:
-                return 1
-            elif reward < 0:
-                return -1
-            else:
-                return reward
+    def update_model(self):
+        self.sess.run(self.update_target)
                         
     def load(self, fileName):
         self.saver.restore(self.sess, fileName)

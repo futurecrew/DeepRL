@@ -61,20 +61,6 @@ class ModelRunnerNeon():
         self.max_action_no = max_action_no
         self.running = True
 
-    def add_to_history_buffer(self, state):
-        if self.use_gpu_replay_mem:
-            self.history_buffer[0, :-1][:] = self.history_buffer[0, 1:]
-            self.history_buffer[0, -1][:] = state
-        else:
-            self.history_buffer[0, :-1] = self.history_buffer[0, 1:]
-            self.history_buffer[0, -1] = state
-
-    def clear_history_buffer(self):
-        if self.use_gpu_replay_mem:
-            self.history_buffer[:] = 0
-        else:
-            self.history_buffer.fill(0)
-
     def get_initializer(self, input_size):
         dnnInit = self.args.dnn_initializer
         if dnnInit == 'xavier':
@@ -107,12 +93,12 @@ class ModelRunnerNeon():
         return layers        
         
     def clip_reward(self, reward):
-            if reward > 0:
-                return 1
-            elif reward < 0:
-                return -1
-            else:
-                return reward
+        if reward > self.args.clip_reward_high:
+            return self.args.clip_reward_high
+        elif reward < self.args.clip_reward_low:
+            return self.args.clip_reward_low
+        else:
+            return reward
 
     def set_input(self, data):
         if self.use_gpu_replay_mem:
@@ -127,7 +113,7 @@ class ModelRunnerNeon():
         output  = self.train_net.fprop(self.input, inference=True)
         return output.T.asnumpyarray()[0]            
 
-    def train(self, minibatch, replay_memory, debug):
+    def train(self, minibatch, replay_memory, learning_rate, debug):
         if self.args.prioritized_replay == True:
             prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
         else:
@@ -177,7 +163,7 @@ class ModelRunnerNeon():
             #delta_value2 = delta.asnumpyarray()
             #pass
           
-        if self.clip_loss:
+        if self.args.clip_loss:
             self.be.clip(delta, -1.0, 1.0, out = delta)
                 
         self.train_net.bprop(delta)

@@ -6,12 +6,11 @@ import time
 import threading
 import tensorflow as tf
 from model_runner_tf_async import ModelRunnerTFAsync
-from network_model import ModelA3C
+from network_model.model_a3c import ModelA3C
             
 class ModelRunnerTFA3C(ModelRunnerTFAsync):
     def init_models(self):
         self.model = self.new_model('net-' + str(self.thread_no))
-        self.action_mat = np.zeros((self.args.train_batch_size, self.max_action_no), dtype=np.uint8)
 
         with tf.device(self.args.device):
             self.a_in = tf.placeholder(tf.float32, shape=[None, self.max_action_no])
@@ -57,8 +56,7 @@ class ModelRunnerTFA3C(ModelRunnerTFAsync):
     def train(self, prestates, v_pres, actions, rewards, terminals, v_post, learning_rate):
         data_len = len(actions)
 
-        action_mat = self.action_mat[:data_len, :]
-        action_mat.fill(0)
+        action_mat = np.zeros((data_len, self.max_action_no), dtype=np.uint8)
         v_in = np.zeros(data_len)
         td_in = np.zeros(data_len)
         
@@ -82,6 +80,7 @@ class ModelRunnerTFA3C(ModelRunnerTFAsync):
         
         self.sess.run( self.apply_grads,
               feed_dict = { self.global_learning_rate: learning_rate } )
+        
         self.sess.run(self.reset_acc_gradients)
         self.sess.run(self.sync)
         
