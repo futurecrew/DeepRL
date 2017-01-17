@@ -13,13 +13,10 @@ import util
 from select import select
 from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
-from model_runner_tf_a3c import ModelRunnerTFA3C
-from model_runner_tf_a3c_lstm import ModelRunnerTFA3CLstm
-from model_runner_tf_async import ModelRunnerTFAsync, load_global_vars
-from model_runner_tf import ModelRunnerTF
-from network_model.model import Model
-from network_model.model_a3c import ModelA3C
-from network_model.model_a3c_lstm import ModelA3CLstm
+from network_model.model_tf_a3c import ModelA3C, ModelRunnerTFA3C
+from network_model.model_tf_a3c_lstm import ModelA3CLstm, ModelRunnerTFA3CLstm
+from network_model.model_tf_async import ModelRunnerTFAsync, load_global_vars
+from network_model.model_tf import Model, ModelRunnerTF
 from env.arguments import get_args
 import util
 
@@ -87,7 +84,7 @@ class DeepRLPlayer:
         
     def initialize_model(self):
         if self.args.backend == 'NEON':
-            from model_runner_neon import ModelRunnerNeon
+            from network_model.model_neon import ModelRunnerNeon
             self.model_runner = ModelRunnerNeon(
                                     self.args, 
                                     max_action_no = len(self.legal_actions),
@@ -686,12 +683,12 @@ global_step_no = 0
 
 def get_env(args, initialize, show_screen):
     if args.env == 'ale':
-        from env.ale_env import AleEnv
+        from env.ale.ale_env import AleEnv
         env = AleEnv(args.rom, show_screen, args.use_env_frame_skip, args.frame_repeat)
         if initialize:
             env.initialize()
     elif args.env == 'vizdoom':
-        from env.vizdoom_env import VizDoomEnv
+        from env.vizdoom.vizdoom_env import VizDoomEnv
         env = VizDoomEnv(args.config, show_screen, args.use_env_frame_skip, args.frame_repeat)
         if initialize:
             env.initialize()
@@ -714,7 +711,7 @@ if __name__ == '__main__':
         elif args.drl == 'a3c_lstm':     
             model = ModelA3CLstm(args, 'global', True,  len(legal_actions), thread_no = -1)
         elif args.drl == '1q':     
-            model = Model(args, 'global', True,  len(legal_actions), thread_no = -1)
+            model = Model(args, 'global', True, len(legal_actions), thread_no = -1)
 
         global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
         global_sess = global_list[0]

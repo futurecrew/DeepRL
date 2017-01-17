@@ -27,11 +27,11 @@ def get_args():
     
     if args.rom == 'vizdoom':
         args.env = 'vizdoom'
-        from env.vizdoom_env import initialize_args
+        from env.vizdoom.vizdoom_env import initialize_args
         initialize_args(args)
     else:
         args.env = 'ale'
-        from env.ale_env import initialize_args
+        from env.ale.ale_env import initialize_args
         initialize_args(args)
     
     return args

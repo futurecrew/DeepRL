@@ -5,9 +5,10 @@ import math
 import time
 import threading
 import tensorflow as tf
-from network_model.model import Model, new_session
+from network_model.model_tf import ModelRunnerTF, new_session
+from network_model.model_tf import Model
 
-class ModelRunnerTFAsync():
+class ModelRunnerTFAsync(ModelRunnerTF):
     def __init__(self, global_list, args, max_action_no, thread_no):
         self.args = args
         self.screen_height = args.screen_height 
@@ -34,11 +35,11 @@ class ModelRunnerTFAsync():
         
     def init_models(self):
         with tf.device(self.args.device):
-            self.model_policy = Model(self.args, "policy", True, self.max_action_no, self.thread_no)
-            self.model_target = Model(self.args, "target", False, self.max_action_no, self.thread_no)
+            model_policy = Model(self.args, "policy", True, self.max_action_no, self.thread_no)
+            model_target = Model(self.args, "target", False, self.max_action_no, self.thread_no)
     
-            self.x_in, self.y, self.var_train = self.model_policy.x, self.model_policy.y, self.model_policy.variables
-            self.x_target, self.y_target, self.var_target = self.model_target.x, self.model_target.y, self.model_target.variables
+            self.x_in, self.y, self.var_train = model_policy.x, model_policy.y, model_policy.variables
+            self.x_target, self.y_target, self.var_target = model_target.x, model_target.y, model_target.variables
 
             # build the variable copy ops
             self.update_target = []
@@ -50,11 +51,9 @@ class ModelRunnerTFAsync():
             self.y_a = tf.reduce_sum(tf.mul(self.y, self.a_in), reduction_indices=1)
     
             self.difference = tf.abs(self.y_a - self.y_)
-            self.errors = 0.5 * tf.square(self.difference)
-            self.priority_weight = tf.placeholder(tf.float32, shape=self.errors.get_shape(), name="priority_weight")
-            loss = tf.reduce_sum(self.errors)
+            self.loss = tf.reduce_sum(tf.square(self.difference))
             
-            self.init_gradients(loss, self.var_train)
+            self.init_gradients(self.loss, self.var_train)
             self.sess.run(tf.initialize_all_variables())
 
     def init_gradients(self, loss, var_train):
@@ -101,73 +100,16 @@ class ModelRunnerTFAsync():
                 sync_list.append(self.save_vars[i].assign(self.global_vars[i]))
             self.save_sync = tf.group(*sync_list)
         
-    def clip_reward(self, reward):
-        if reward > self.args.clip_reward_high:
-            return self.args.clip_reward_high
-        elif reward < self.args.clip_reward_low:
-            return self.args.clip_reward_low
-        else:
-            return reward
-
-    def predict(self, history_buffer):
-        return self.sess.run([self.y], {self.x_in: history_buffer})[0]
-    
-    def print_weights(self):
-        for var in self.model_policy.get_vars():
-            print ''
-            print '[ ' + var.name + ']'
-            print self.sess.run(var)
-        
     def train(self, minibatch, replay_memory, learning_rate, debug):
-        if self.args.prioritized_replay == True:
-            prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch
-        else:
-            prestates, actions, rewards, poststates, terminals = minibatch
-        
-        y2 = self.y_target.eval(feed_dict={self.x_target: poststates}, session=self.sess)
-        
-        if self.args.double_dqn == True:
-            y3 = self.y.eval(feed_dict={self.x_in: poststates}, session=self.sess)
-
-        data_len = len(actions)
-        
-        action_mat = np.zeros((data_len, self.max_action_no), dtype=np.uint8)
-        y_ = np.zeros(data_len)
-        
-        for i in range(data_len):
-            action_mat[i, actions[i]] = 1
-            if self.args.clip_reward:
-                reward = self.clip_reward(rewards[i])
-            else:
-                reward = rewards[i]
-            if terminals[i]:
-                y_[i] = reward
-            else:
-                if self.args.double_dqn == True:
-                    max_index = np.argmax(y3[i])
-                    y_[i] = reward + self.discount_factor * y2[i][max_index]
-                else:
-                    y_[i] = reward + self.discount_factor * np.max(y2[i])
-
-        self.sess.run(self.train_step, feed_dict={
-            self.x_in: prestates,
-            self.a_in: action_mat,
-            self.y_: y_
-        })
+        super(ModelRunnerTFAsync, self).train(minibatch, replay_memory, learning_rate, debug)
 
         self.sess.run(self.apply_grads, feed_dict={ self.global_learning_rate : learning_rate })
         self.sess.run(self.reset_acc_gradients)
         self.sess.run(self.sync)
-
-    def update_model(self):
-        self.sess.run(self.update_target)
-                        
+    
     def load(self, fileName):
         self.saver.restore(self.sess, fileName)
-
-    def save(self, fileName):
-        self.saver.save(self.sess, fileName)
-
+        
     def copy_from_global_to_local(self):
         self.sess.run(self.sync)
         
