@@ -116,7 +116,6 @@ class DeepRLPlayer:
                 self.model_runner = ModelRunnerTF(
                                     self.args, 
                                     max_action_no = len(self.legal_actions),
-                                    batch_dimension = self.batch_dimension,
                                     thread_no = self.thread_no
                                     )
         else:

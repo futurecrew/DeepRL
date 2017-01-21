@@ -112,7 +112,7 @@ def initialize_args(args):
         args.train_step = 5
         args.train_batch_size = 5
         args.train_epsilon_start_step = 0    # start decreasing greedy epsilon from this train step 
-        args.train_epsilon_end_step = 100000    # end decreasing greedy epsilon from this train step 
+        args.train_epsilon_end_step = 1000000    # end decreasing greedy epsilon from this train step 
         args.learning_rate = 0.0007
         args.rms_decay = 0.95                
         args.rms_epsilon = 0.01                 
@@ -145,10 +145,13 @@ def initialize_args(args):
         args.minibatch_random = True
         args.train_min_epsilon = 0.1    # minimum greedy epsilon value for exloration
         args.train_epsilon_start_step = 0    # start decreasing greedy epsilon from this train step 
-        args.train_epsilon_end_step = 100000    # end decreasing greedy epsilon from this train step 
+        args.train_epsilon_end_step = 1000000    # end decreasing greedy epsilon from this train step 
         args.update_step = 10000    # copy train network into target network every this train step
         args.optimizer = 'RMSProp'    # 
         args.save_step = 50000            # save result every this training step
+        
+        # DJDJ
+        args.train_step_type = "999"
     
         if args.drl == 'dqn':                     # DQN hyper params
             args.double_dqn = False                   # whether to use double dqn

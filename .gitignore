@@ -1,0 +1,6 @@
+*.pyc
+*.pickle
+*.weight
+*.weight.meta
+*.log
+checkpoint

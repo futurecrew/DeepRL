@@ -47,22 +47,20 @@ class ModelRunnerTF(object):
             optimizer = tf.train.RMSPropOptimizer(self.args.learning_rate, decay=self.args.rms_decay, epsilon=self.args.rms_epsilon)
             self.difference = tf.abs(self.y_a - self.y_)
 
+            quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
+            linear_part = self.difference - quadratic_part
+            self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
             if self.args.prioritized_replay == True:
-                self.priority_weight = tf.placeholder(tf.float32, shape=[None], name="priority_weight")
-            else:
-                self.priority_weight = None
-                
-            self.loss = tf.reduce_sum(tf.square(self.difference))
-                
-            gvs = optimizer.compute_gradients(self.loss, var_list=self.var_train, grad_loss=self.priority_weight)
-            new_gvs = [(tf.clip_by_value(grad, -1, 1), var) for grad, var in gvs]
-            self.train_step = optimizer.apply_gradients(new_gvs)
-            
+                self.priority_weight = tf.placeholder(tf.float32, shape=self.difference.get_shape(), name="priority_weight")
+                self.errors = tf.mul(self.errors, self.priority_weight)
+            self.loss = tf.reduce_sum(self.errors)
+            self.train_step = optimizer.minimize(self.loss)     
+                               
             self.saver = tf.train.Saver(max_to_keep=100)
     
             # Initialize variables
             self.sess.run(tf.initialize_all_variables())
-            self.sess.run(self.update_target) # is this necessary?
+            self.sess.run(self.update_target)
 
     def clip_reward(self, reward):
         if reward > self.args.clip_reward_high:
@@ -112,7 +110,7 @@ class ModelRunnerTF(object):
                     y_[i] = reward + self.args.discount_factor * np.max(y2[i])
 
         if self.args.prioritized_replay == True:
-            delta_value, _, y_a = self.sess.run([self.difference, self.train_step, self.y_a], feed_dict={
+            delta_value, _ = self.sess.run([self.difference, self.train_step], feed_dict={
                 self.x_in: prestates,
                 self.a_in: action_mat,
                 self.y_: y_,
@@ -121,7 +119,6 @@ class ModelRunnerTF(object):
             for i in range(self.args.train_batch_size):
                 replay_memory.update_td(heap_indexes[i], abs(delta_value[i]))
                 if debug:
-                    print 'y_- y_a[%s]: %.5f, y_: %.5f, y_a: %.5f' % (i, (y_[i] - y_a[i]), y_[i], y_a[i]) 
                     print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], delta_value[i], weights[i] * delta_value[i]) 
         else:
             self.sess.run(self.train_step, feed_dict={
