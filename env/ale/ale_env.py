@@ -85,6 +85,11 @@ def initialize_args(args):
         args.dnn_initializer = 'fan_in'    # 
         args.use_gpu_replay_mem = False       # Whether to store replay memory in gpu or not to speed up leraning        
     
+    if args.network == '':
+        args.network = 'nature'
+    if args.network != 'nature' and args.network != 'nips':
+        raise ValueError('network should be either nips or nature')
+    
     if args.drl in ['a3c_lstm', 'a3c']:
         args.asynchronousRL = True
         args.train_batch_size = 5
@@ -150,9 +155,6 @@ def initialize_args(args):
         args.optimizer = 'RMSProp'    # 
         args.save_step = 50000            # save result every this training step
         
-        # DJDJ
-        args.train_step_type = "999"
-    
         if args.drl == 'dqn':                     # DQN hyper params
             args.double_dqn = False                   # whether to use double dqn
             args.test_epsilon = 0.05                    # greedy epsilon for test
