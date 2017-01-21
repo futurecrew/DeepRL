@@ -15,7 +15,7 @@ def get_args():
     parser.add_argument('rom', type=str, help='ALE rom file')    
     parser.add_argument('--thread-no', type=int, default=1, help='Number of multiple threads for Asynchronous RL')
     parser.add_argument('--network', type=str, default='', help='network model nature or nips') 
-    parser.add_argument('--drl', type=str, default='dqn', choices=['dqn', 'double_dqn', 'prioritized_rank', 'prioritized_proportion', 'a3c_lstm', 'a3c', '1q'])
+    parser.add_argument('--drl', type=str, default='dqn', choices=['dqn', 'double_dqn', 'prioritized_rank', 'a3c_lstm', 'a3c', '1q'])
     parser.add_argument('--snapshot', type=str, default=None, help='trained file to resume training or to replay') 
     parser.add_argument('--device', type=str, default='', help='gpu or cpu')
     parser.add_argument('--show-screen', action='store_true', help='whether to show display or not')
