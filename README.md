@@ -4,10 +4,11 @@ This project implements deep reinforcement learning algorithms including followi
   - Deep Q Network (Human-level control through deep reinforcement learning) 
   - Deep Reinforcement Learning with Double Q-learning
   - Asynchronous Methods for Deep Reinforcement Learning
-  - Prioritized Experience Replay (in working)
+  - Prioritized Experience Replay
 
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="300">
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.gif" width="300">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="280">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.gif" width="280">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/hero.gif" width="280">
 
 
 
@@ -16,6 +17,8 @@ This project implements deep reinforcement learning algorithms including followi
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="420">
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.png" width="400">
 </nobr>
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/hero_priority.png" width="420">
+
 
 In my PC (i7 CPU, Titan-X Maxwell),
   - A3C FF took 20 hours (4.00M global steps/hour)
@@ -33,10 +36,11 @@ In my PC (i7 CPU, Titan-X Maxwell),
   
 ## How to train
 ```
-DQN        : python deep_rl_train.py /path/to/rom --drl dqn
-Double DQN : python deep_rl_train.py /path/to/rom --drl double_dqn
-A3C FF     : python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8
-A3C LSTM   : python deep_rl_train.py /path/to/rom --drl a3c_lstm --thread-no 8
+DQN         : python deep_rl_train.py /path/to/rom --drl dqn
+Double DQN  : python deep_rl_train.py /path/to/rom --drl double_dqn
+Prioritized : python deep_rl_train.py /path/to/rom --drl prioritized_rank
+A3C FF      : python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8
+A3C LSTM    : python deep_rl_train.py /path/to/rom --drl a3c_lstm --thread-no 8
 ```
   
 ## How to retrain
