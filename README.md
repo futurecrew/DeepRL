@@ -15,14 +15,17 @@ This project implements deep reinforcement learning algorithms including followi
 ## Test scores
 <nobr>
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="420">
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.png" width="400">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.png" width="420">
 </nobr>
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/hero_priority.png" width="420">
 
 
 In my PC (i7 CPU, Titan-X Maxwell),
-  - A3C FF took 20 hours (4.00M global steps/hour)
-  - A3C LSTM took 44 hours (1.84M global steps/hour)
+  - DQN took 96 hours for 80M steps (shown 11M steps)
+  - Double-Q took 112 hours for 80M steps (shown 11M steps)
+  - Prioritized took 112 hours for 80M steps (shown 11M steps)
+  - A3C FF took 20 hours for 80M global steps
+  - A3C LSTM took 44 hours for 80M global steps
 
 ## Requirements
   - Python-2.7
@@ -51,8 +54,8 @@ ex) python deep_rl_train.py /rom/breakout.bin --drl a3c --thread-no 8 --snapshot
 
 ## How to play
 ```
-python play.py /path/to/rom --snapshot path/to/snapshot_file
-ex) python play.py /rom/space_invaders.bin --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828
+python play.py path/to/snapshot_file
+ex) python play.py snapshot/space_invaders/20161114_003838/a3c_79993828
 ```
 
 ## Debug console commands
