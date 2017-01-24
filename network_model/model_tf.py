@@ -138,16 +138,16 @@ class ModelRunnerTF(object):
         self.saver.save(self.sess, fileName)
         
 class Model(object):
-    def __init__(self, args, name, trainable, action_type_no, thread_no):
+    def __init__(self, args, name, trainable, action_no, thread_no):
         self.args = args
         self.network = args.network
         self.screen_height = args.screen_height
         self.screen_width = args.screen_width 
         self.history_len = args.screen_history
-        self.action_type_no = action_type_no
+        self.action_no = action_no
         self.thread_no = thread_no
         with tf.device(args.device):
-            self.build_network(name, args.network, trainable, action_type_no)
+            self.build_network(name, args.network, trainable, action_no)
     
     def make_layer_variables(self, shape, trainable, name_suffix, weight_range=-1):
         if weight_range == -1:

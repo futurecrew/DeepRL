@@ -6,23 +6,32 @@ import logging
 logger = logging.getLogger(__name__)
 
 class ReplayMemory:
-  def __init__(self, size, batch_size, history_length, width, height, minibatch_random, screen_order='shw'):
-    self.size = size
-    self.minibatch_random = minibatch_random
-    self.screen_order = screen_order
+  def __init__(self, args, state_dtype, continuous_action, action_group_no):
+    self.size = args.max_replay_memory
+    self.minibatch_random = args.minibatch_random
+    self.screen_order = args.screen_order
+    batch_size = args.train_batch_size
+    history_length = args.screen_history
+    height = args.screen_height
+    width = args.screen_width
+
     # preallocate memory
-    self.actions = np.empty(self.size, dtype = np.uint8)
+    if continuous_action:
+        self.actions = np.empty((self.size, action_group_no), dtype = np.float32)
+    else:
+        self.actions = np.empty(self.size, dtype = np.uint8)
+    
     self.rewards = np.empty(self.size, dtype = np.float32)
     if self.screen_order == 'hws':        # (height, width, size)
         screen_dim = (height, width, self.size)
         state_dim = (batch_size, height, width, history_length)
-        self.history_buffer = np.zeros((1, height, width, history_length), dtype=np.float32)
+        self.history_buffer = np.zeros((1, height, width, history_length), dtype=state_dtype)
     else:       # (size, height, width)
         screen_dim = (self.size, height, width)
         state_dim = (batch_size, history_length, height, width)
         # Use batch_size instead of 1 to support NEON which requires batch size for network input
-        self.history_buffer = np.zeros((batch_size, history_length, height, width), dtype=np.float32)
-    self.screens = np.empty(screen_dim, dtype = np.uint8)
+        self.history_buffer = np.zeros((batch_size, history_length, height, width), dtype=state_dtype)
+    self.screens = np.empty(screen_dim, dtype = state_dtype)
     self.terminals = np.empty(self.size, dtype = np.bool)
     self.history_length = history_length
     self.dims = (height, width)
@@ -31,13 +40,12 @@ class ReplayMemory:
     self.current = 0
 
     # pre-allocate prestates and poststates for minibatch
-    self.prestates = np.empty(state_dim, dtype = np.uint8)
-    self.poststates = np.empty(state_dim, dtype = np.uint8)
+    self.prestates = np.empty(state_dim, dtype = state_dtype)
+    self.poststates = np.empty(state_dim, dtype = state_dtype)
 
     logger.info("Replay memory size: %d" % self.size)
 
   def add(self, action, reward, screen, terminal):
-    assert screen.shape == self.dims
     addedIndex = self.current
     # NB! screen is post-state, after action and reward
     self.actions[self.current] = action
@@ -123,7 +131,7 @@ class ReplayMemory:
 
   def get_minibatch_sequential(self, max_size):
     # memory must include poststate, prestate and history
-    assert self.count >= self.batch_size + self.history_length
+    assert self.count >= self.history_length
     if max_size == -1:
         max_size = self.batch_size
         

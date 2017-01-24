@@ -43,6 +43,14 @@ class VizDoomEnv():
             game.close()
         return self.actions
         
+    @property
+    def state_dtype(self):
+        return np.uint8
+        
+    @property
+    def continuous_action(self):
+        return False
+        
     def get_action_list(self, game):
         available_buttons_size = game.get_available_buttons_size()
 
@@ -200,7 +208,6 @@ def initialize_args(args):
             args.sampling_beta = 0.5    # 
             args.heap_sort_term = 250000    # 
             args.double_dqn = True
-            args.use_priority_weight = True    # whether to priority weight
         elif args.drl == 'prioritized_proportion':    # Prioritized experience replay params for PROPORTION
             args.prioritized_replay = True    # 
             args.learning_rate = 0.00025 / 4    # 
@@ -209,6 +216,5 @@ def initialize_args(args):
             args.sampling_beta = 0.4    # 
             args.heap_sort_term = 250000    # 
             args.double_dqn = True
-            args.use_priority_weight = True    # whether to priority weight
             
     return args

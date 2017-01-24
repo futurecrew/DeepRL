@@ -16,9 +16,9 @@ from sampling_manager import SamplingManager
 from network_model.model_tf_a3c import ModelA3C, ModelRunnerTFA3C
 from network_model.model_tf_a3c_lstm import ModelA3CLstm, ModelRunnerTFA3CLstm
 from network_model.model_tf_async import ModelRunnerTFAsync, load_global_vars
+from network_model.model_tf_ddpg import ModelRunnerTFDdpg
 from network_model.model_tf import Model, ModelRunnerTF
-from env.arguments import get_args
-import util
+from env.arguments import get_args, get_env
 
 class DeepRLPlayer:
     def __init__(self, args, play_file=None, thread_no=0, global_list=None):
@@ -54,12 +54,8 @@ class DeepRLPlayer:
             log_file="output/%s_%s.log" % (args.game, self.train_start)            
             util.Logger(log_file)
             
-        game_folder = self.args.rom.split('/')[-1]
-        if '.' in game_folder:
-            game_folder = game_folder.split('.')[0]
-        self.snapshot_folder = 'snapshot/' + game_folder
-        if os.path.exists(self.snapshot_folder) == False:
-            os.makedirs(self.snapshot_folder)
+        if os.path.exists(args.snapshot_folder) == False:
+            os.makedirs(args.snapshot_folder)
         
         self.print_env()
         self.initialize_post()
@@ -91,7 +87,13 @@ class DeepRLPlayer:
                                     batch_dimension = self.batch_dimension
                                     )
         elif self.args.backend == 'TF':
-            if self.args.drl == 'a3c':            
+            if self.args.ddpg:
+                self.model_runner = ModelRunnerTFDdpg(
+                                self.args, 
+                                action_group_no = self.env.action_group_no,
+                                thread_no = self.thread_no
+                                )
+            elif self.args.drl == 'a3c':            
                 self.model_runner = ModelRunnerTFA3C(
                                 self.global_list,
                                 self.args, 
@@ -119,26 +121,16 @@ class DeepRLPlayer:
                                     thread_no = self.thread_no
                                     )
         else:
-            print "args.backend should be NEON or TF."
+            raise ValueError('args.backend should be TF or NEON.')
 
     def initialize_replay_memory(self):
-        uniform_replay_memory = ReplayMemory(
-                                     self.args.max_replay_memory, 
-                                     self.args.train_batch_size,
-                                     self.args.screen_history,
-                                     self.args.screen_width,
-                                     self.args.screen_height,
-                                     self.args.minibatch_random,
-                                     self.args.screen_order)
+        if self.env.continuous_action:
+            action_group_no = self.env.action_group_no
+        else:
+            action_group_no = 1
+        uniform_replay_memory = ReplayMemory(self.args, self.env.state_dtype, self.env.continuous_action, action_group_no)
         if self.args.prioritized_replay == True:
-            self.replay_memory = SamplingManager(uniform_replay_memory,
-                                         self.args.max_replay_memory, 
-                                         self.args.train_batch_size,
-                                         self.args.screen_history,
-                                         self.args.prioritized_mode,
-                                         self.args.sampling_alpha,
-                                         self.args.sampling_beta,
-                                         self.args.heap_sort_term)
+            self.replay_memory = SamplingManager(self.args, uniform_replay_memory)
         else:
             self.replay_memory = uniform_replay_memory
 
@@ -170,6 +162,12 @@ class DeepRLPlayer:
         return action_index
             
     def get_action_index(self, mode):
+        if self.env.continuous_action:
+            return self.get_action_continuous(mode)
+        else:        
+            return self.get_action_discrete(mode)
+        
+    def get_action_discrete(self, mode):
         state = self.replay_memory.history_buffer
         if self.args.choose_max_action:
             greedy_epsilon = self.get_greedy_epsilon(mode)
@@ -183,7 +181,23 @@ class DeepRLPlayer:
             action_values = self.model_runner.predict(state)
             action_index = self.choose_action(action_values)
             return action_index, 0
-                                                 
+
+    def get_action_continuous(self, mode):
+        global debug_print_step
+
+        state = self.replay_memory.history_buffer
+        action_values = self.model_runner.predict(state)
+
+        greedy_epsilon = self.get_greedy_epsilon(mode)
+        
+        if mode == 'TRAIN':
+            self.env.apply_action_noise(action_values, greedy_epsilon)
+                    
+        if debug_print_step and self.thread_no == 0:
+            print 'greedy_epsilon: %.3f, action_values: %s' % (greedy_epsilon, action_values)
+
+        return action_values, greedy_epsilon
+                                                         
     def get_action_state_value(self, mode):
         state = self.replay_memory.history_buffer
         action_values, state_value = self.model_runner.predict_action_state(state)
@@ -200,7 +214,7 @@ class DeepRLPlayer:
     
     def print_env(self):
         if self.args.asynchronousRL == False or self.thread_no == 0:
-            print 'Start time: %s' % time.strftime('%Y.%m.%d %H:%M:%S')
+            print 'Start time: %s' % self.train_start
             print '[ Running Environment ]'
             for arg in sorted(vars(self.args)):
                 print '{} : '.format(arg).ljust(30) + '{}'.format(getattr(self.args, arg))
@@ -233,8 +247,13 @@ class DeepRLPlayer:
                 self.replay_memory.add_to_history_buffer(state)
     
     def resize_screen(self, state):
-        resized = cv2.resize(state, (self.args.screen_width, self.args.screen_height))
-        return resized
+        if len(state.shape) != 2:
+            return state
+        elif state.shape[0] == self.args.screen_height and state.shape[1] == self.args.screen_width:
+            return state
+        else:
+            resized = cv2.resize(state, (self.args.screen_width, self.args.screen_height))
+            return resized
         
     def do_actions(self, action_index, mode):
         global debug_display
@@ -247,13 +266,17 @@ class DeepRLPlayer:
             _debug_display = False
             _debug_display_sleep = 0
         
-        action = self.legal_actions[action_index]
+        if self.env.continuous_action:
+            action = action_index
+        else:
+            action = self.legal_actions[action_index]
+            
         reward = 0
         terminal = False 
         lives = self.env.lives()
         frame_repeat = self.args.frame_repeat
 
-        if self.args.use_env_frame_skip == True:
+        if frame_repeat == 1 or self.args.use_env_frame_skip == True:
             reward += self.env.act(action)
             new_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
             game_over = self.env.game_over()
@@ -588,7 +611,7 @@ class DeepRLPlayer:
             self.debug_input.finish()        
 
     def save(self, file_name):
-        timesnapshot_folder = self.snapshot_folder + '/' + self.train_start
+        timesnapshot_folder = self.args.snapshot_folder + '/' + self.train_start
         if os.path.exists(timesnapshot_folder) == False:
             os.makedirs(timesnapshot_folder)
         
@@ -680,19 +703,6 @@ debug_quit = False
 global_data = []
 global_step_no = 0
 
-def get_env(args, initialize, show_screen):
-    if args.env == 'ale':
-        from env.ale.ale_env import AleEnv
-        env = AleEnv(args.rom, show_screen, args.use_env_frame_skip, args.frame_repeat)
-        if initialize:
-            env.initialize()
-    elif args.env == 'vizdoom':
-        from env.vizdoom.vizdoom_env import VizDoomEnv
-        env = VizDoomEnv(args.config, show_screen, args.use_env_frame_skip, args.frame_repeat)
-        if initialize:
-            env.initialize()
-    return env
-
 if __name__ == '__main__':
     args = get_args()
     save_file = args.snapshot
@@ -702,7 +712,7 @@ if __name__ == '__main__':
         playerList = []
 
         env = get_env(args, False, False)
-        legal_actions = env.get_actions(args.rom)
+        legal_actions = env.get_actions(args.env)
         
         # initialize global settings
         if args.drl == 'a3c':
@@ -780,7 +790,7 @@ if __name__ == '__main__':
                 player.print_env()
                 player.initialize_post()
                 player.model_runner.load(save_file + '.weight')
-                player.train(replay_memory_no = player.replay_memory_no)
+                player.train()
         else:
             player = DeepRLPlayer(args)
             player.total_step = 0

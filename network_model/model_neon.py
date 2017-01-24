@@ -158,10 +158,7 @@ class ModelRunnerNeon():
                     print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], delta_value[actions[i], i], weights[i] * delta_value[actions[i], i]) 
                 replay_memory.update_td(heap_indexes[i], abs(delta_value[actions[i], i]))
                 delta_value[actions[i], i] = weights[i] * delta_value[actions[i], i]
-            if self.args.use_priority_weight == True:
-                delta.set(delta_value.copy())
-            #delta_value2 = delta.asnumpyarray()
-            #pass
+            delta.set(delta_value.copy())
           
         if self.args.clip_loss:
             self.be.clip(delta, -1.0, 1.0, out = delta)

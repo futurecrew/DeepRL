@@ -3,16 +3,15 @@ from replay_memory import ReplayMemory
 import numpy as np
 
 class SamplingManager:
-    def __init__(self, replay_memory, size, batch_size, history_len, sampling_mode,
-                            sampling_alpha, sampling_beta, sort_term):
+    def __init__(self, args, replay_memory):
         self.replay_memory = replay_memory
-        self.batch_size = batch_size
-        self.history_len = history_len
-        self.sampling_mode = sampling_mode
-        self.alpha = sampling_alpha
-        self.beta = sampling_beta
-        self.sort_term = sort_term
-        self.heap_index_list = [-1] * size        # This list maps replay_index to heap_index
+        self.batch_size = args.train_batch_size
+        self.history_len = args.screen_history
+        self.sampling_mode = args.prioritized_mode
+        self.alpha = args.sampling_alpha
+        self.beta = args.sampling_beta
+        self.sort_term = args.heap_sort_term
+        self.heap_index_list = [-1] * args.max_replay_memory        # This list maps replay_index to heap_index
         self.heap = []                                     # Binary heap
         self.heap.append((None, None))
         self.proportion_epsilon = 0.0000001

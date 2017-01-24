@@ -9,7 +9,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     
     if args.snapshot == None:
-        print 'Usage: python player.py [path/to/snapshot/file]'
+        print 'Usage: python play.py [path/to/snapshot/file]'
         exit()
     
     print 'Play using data_file: %s' % args.snapshot

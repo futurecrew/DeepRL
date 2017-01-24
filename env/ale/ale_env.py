@@ -1,4 +1,5 @@
 import random
+import numpy as np
 from ale_python_interface import ALEInterface
 
 class AleEnv():
@@ -35,6 +36,14 @@ class AleEnv():
             self.actions = ale.getMinimalActionSet()
         return self.actions
         
+    @property
+    def state_dtype(self):
+        return np.uint8
+        
+    @property
+    def continuous_action(self):
+        return False
+    
     def reset_game(self):
         self.ale.reset_game()
         
@@ -174,7 +183,6 @@ def initialize_args(args):
             args.sampling_beta = 0.5    # 
             args.heap_sort_term = 250000    # 
             args.double_dqn = True
-            args.use_priority_weight = True    # whether to priority weight
         elif args.drl == 'prioritized_proportion':    # Prioritized experience replay params for PROPORTION
             args.prioritized_replay = True    # 
             args.learning_rate = 0.00025 / 4    # 
@@ -184,7 +192,6 @@ def initialize_args(args):
             args.sampling_beta = 0.4    # 
             args.heap_sort_term = 250000    # 
             args.double_dqn = True
-            args.use_priority_weight = True    # whether to priority weight
 
     return args
     
