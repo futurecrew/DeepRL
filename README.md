@@ -13,19 +13,20 @@ This project implements deep reinforcement learning algorithms including followi
 
 
 ## Test scores
+In my PC (i7 CPU, Titan-X Maxwell),
+<p>
 <nobr>
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="420">
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.png" width="420">
 </nobr>
+  - A3C FF took 20 hours for 80M global steps (nips network)
+  - A3C LSTM took 44 hours for 80M global steps (nips network)
+
+<p>
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/hero_priority.png" width="420">
-
-
-In my PC (i7 CPU, Titan-X Maxwell),
-  - DQN took 96 hours for 80M steps (shown 11M steps)
-  - Double-Q took 112 hours for 80M steps (shown 11M steps)
-  - Prioritized took 112 hours for 80M steps (shown 11M steps)
-  - A3C FF took 20 hours for 80M global steps
-  - A3C LSTM took 44 hours for 80M global steps
+  - DQN took 96 hours for 80M steps (shown 11M steps, nature network)
+  - Double-Q took 112 hours for 80M steps (shown 11M steps, nature network)
+  - Prioritized took 112 hours for 80M steps (shown 11M steps, nature network)
 
 ## Requirements
   - Python-2.7
