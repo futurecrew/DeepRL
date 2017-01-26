@@ -72,6 +72,7 @@ class TorcsEnv():
 
         # Modify here if you use multiple tracks in the environment
         self.client = snakeoil3.Client(self.bin, p=self.port, vision=self.vision, track_file=self.track_file)  # Open new UDP in vtorcs
+        #self.client = snakeoil3.Client(self.bin, p=self.port, vision=self.vision, track_file=self.track_file, s=2)  # Open new UDP in vtorcs
         self.client.MAX_STEPS = np.inf
 
         client = self.client
@@ -148,6 +149,9 @@ class TorcsEnv():
             return -100
         #reward = obs['speedX'] * abs(math.cos(obs['angle'])) -  obs['speedX'] * abs(math.sin(obs['angle'])) - obs['speedX'] * abs(obs['trackPos'])
         reward = obs['speedX'] * abs(math.cos(obs['angle'])) -  obs['speedX'] * abs(math.sin(obs['angle'])) - 50 * abs(obs['trackPos'])
+        
+        #print 'speedX: %s, angle: %.3f, tracPos: %.3f' % (obs['speedX'], obs['angle'], obs['trackPos'])
+        
         if obs['damage'] > self.damage:
             self.damage = obs['damage']
             if reward > 0:
@@ -263,10 +267,7 @@ def initialize_args(args):
         args.rms_epsilon = 0.01                 
         args.choose_max_action = True
 
-        # DJDJ        
-        #args.lost_life_game_over = True    # whether to regard lost life as game over
-        args.lost_life_game_over = False    # whether to regard lost life as game over
-        
+        args.lost_life_game_over = False    # whether to regard lost life as game over        
         args.lost_life_terminal = True    # whether to regard lost life as terminal state
         args.minibatch_random = False       # whether to use random indexing or sequential indexing for minibatch
         args.train_min_epsilon = 0.1    # minimum greedy epsilon value for exloration
@@ -288,11 +289,7 @@ def initialize_args(args):
         args.max_epoch = 200
         args.epoch_step = 250000
         args.train_start = 10        # start training after filling this replay memory size
-
-        # DJDJ        
-        #args.train_step = 4                 # Train every this screen step
-        args.train_step = 1                 # Train every this screen step
-        
+        args.train_step = 1                 # Train every this screen step        
         args.learning_rate = 0.00025                 
         args.rms_decay = 0.95                
         args.rms_epsilon = 0.01                 
@@ -300,9 +297,9 @@ def initialize_args(args):
         args.lost_life_game_over = True    # whether to regard lost life as game over
         args.lost_life_terminal = True    # whether to regard lost life as terminal state
         args.minibatch_random = True
-        args.train_min_epsilon = 0.1    # minimum greedy epsilon value for exloration
+        args.train_min_epsilon = 0.0    # minimum greedy epsilon value for exloration
         args.train_epsilon_start_step = 0    # start decreasing greedy epsilon from this train step 
-        args.train_epsilon_end_step = 30000    # end decreasing greedy epsilon from this train step 
+        args.train_epsilon_end_step = 20000    # end decreasing greedy epsilon from this train step 
         args.update_step = 1    # copy train network into target network every this train step
         args.optimizer = 'RMSProp'    # 
         args.save_step = 10000            # save result every this training step
@@ -319,11 +316,7 @@ def initialize_args(args):
             args.prioritized_replay = False 
         elif args.drl == 'prioritized_rank':    # Prioritized experience replay params for RANK
             args.prioritized_replay = True    # 
-            
-            # DJDJ
             args.learning_rate = 0.00025 / 4    #
-            #args.learning_rate = 0.00025 / 8
-             
             args.test_epsilon = 0.001    # 
             args.prioritized_mode = 'RANK'    # 
             args.sampling_alpha = 0.7    # 

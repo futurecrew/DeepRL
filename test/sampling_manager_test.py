@@ -3,6 +3,7 @@ import random
 import time
 import numpy as np
 import unittest
+import argparse
 from replay_memory import ReplayMemory
 from sampling_manager import SamplingManager
 
@@ -27,6 +28,24 @@ class TestSamplingManager(unittest.TestCase):
             self.alpha = 0.7
             self.beta = 0.5
             self.sort_term = 250000
+            
+        parser = argparse.ArgumentParser()    
+        self.args = parser.parse_args()
+        self.args.minibatch_random = True
+        self.args.screen_order = 'hws'
+        self.args.train_batch_size = 32
+        self.args.screen_history = 4
+        self.args.screen_height = 84
+        self.args.screen_width = 84
+
+        self.args.prioritized_mode = self.mode
+        self.args.sampling_alpha =self.alpha
+        self.args.sampling_beta = self.beta
+        self.args.heap_sort_term = self.sort_term
+        
+        self.state_dtype = 'uint8'
+        self.continuous_action = False
+        self.action_group_no = 1            
 
     def check_heap_index_list_validity(self, manager):
         for i in range(1, len(manager.heap)):
@@ -36,11 +55,12 @@ class TestSamplingManager(unittest.TestCase):
     def test_add(self):
         replay_memory_size = 3
         totalList = [5, 10, 15, 100]
+        self.args.max_replay_memory = replay_memory_size
         
         for data_len in totalList:
             #print 'data_len : %s' % data_len
-            uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-            manager = SamplingManager(uniform_replay_memory, replay_memory_size, 32, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+            manager = SamplingManager(self.args, uniform_replay_memory)
             for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -57,10 +77,12 @@ class TestSamplingManager(unittest.TestCase):
     
     def atest_add2(self):
         replay_memory_size = 1000000
+
+        self.args.max_replay_memory = replay_memory_size
         
         for t in range(2):
-            uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-            manager = SamplingManager(uniform_replay_memory, replay_memory_size, 32, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+            manager = SamplingManager(self.args, uniform_replay_memory)
             for i in range(2200000):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -76,8 +98,11 @@ class TestSamplingManager(unittest.TestCase):
         replay_memory_size = 100000
         data_len = 220000
         minibatch_size = 32
-        uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-        manager = SamplingManager(uniform_replay_memory, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+
+        self.args.max_replay_memory = replay_memory_size
+        
+        uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+        manager = SamplingManager(self.args, uniform_replay_memory)
         for i in range(data_len):
             state = np.zeros((84, 84), dtype=np.int)
             state.fill(i)
@@ -110,10 +135,13 @@ class TestSamplingManager(unittest.TestCase):
     def atest_get_minibatch2(self):    
         replay_memory_size = 100000
         minibatch_size = 32
+
+        self.args.max_replay_memory = replay_memory_size
+                
         data_len_list = [1000, 100000, 220000]
         for data_len in data_len_list:
-            uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-            manager = SamplingManager(uniform_replay_memory, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+            manager = SamplingManager(self.args, uniform_replay_memory)
             for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -144,10 +172,13 @@ class TestSamplingManager(unittest.TestCase):
     def test_get_minibatch3(self):    
         replay_memory_size = 100000
         minibatch_size = 32
+
+        self.args.max_replay_memory = replay_memory_size
+                        
         data_len_list = [1000, 100000, 200000]
         for data_len in data_len_list:
-            uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-            manager = SamplingManager(uniform_replay_memory, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+            manager = SamplingManager(self.args, uniform_replay_memory)
             for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -173,12 +204,15 @@ class TestSamplingManager(unittest.TestCase):
     
     def test_sort(self):
         replay_memory_size = 10**6
+
+        self.args.max_replay_memory = replay_memory_size
+                
         #data_len_list = [100, 1000, 2000, 10**6]
         data_len_list = [100, 1000, 2000]
         for data_len in data_len_list:
             minibatch_size = 32
-            uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-            manager = SamplingManager(uniform_replay_memory, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+            manager = SamplingManager(self.args, uniform_replay_memory)
             for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -207,11 +241,14 @@ class TestSamplingManager(unittest.TestCase):
         
     def test_update_td(self):
         replay_memory_size = 1000
+
+        self.args.max_replay_memory = replay_memory_size
+                
         data_len_list = [100, 1000, 2000, 2200]
         for data_len in data_len_list:
             minibatch_size = 32
-            uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-            manager = SamplingManager(uniform_replay_memory, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+            manager = SamplingManager(self.args, uniform_replay_memory)
             for i in range(data_len):
                 state = np.zeros((84, 84), dtype=np.int)
                 state.fill(i)
@@ -255,14 +292,16 @@ class TestSamplingManager(unittest.TestCase):
         data_len_list = [10000]
         start_td = 0.000001
         end_td = 1.0
+
+        self.args.max_replay_memory = replay_memory_size
+                
         for data_len in data_len_list:
-            
             print 'testing %s' % data_len
             
             td_increase = (end_td - start_td) / data_len
             minibatch_size = 32
-            uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-            manager = SamplingManager(uniform_replay_memory, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+            uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+            manager = SamplingManager(self.args, uniform_replay_memory)
             
             time1 = time.time()
             for i in range(data_len):
@@ -281,13 +320,13 @@ class TestSamplingManager(unittest.TestCase):
     def test_get_segments(self):
         #data_len = 10**6
         data_len = 10**4
-        replay_memory_size = data_len
+        self.args.max_replay_memory = data_len
         minibatch_size = 32
         start_td = 0.000001
         end_td = 1.0
         td_increase = (end_td - start_td) / data_len
-        uniform_replay_memory = ReplayMemory(replay_memory_size, 32, 4, 84, 84, True)            
-        manager = SamplingManager(uniform_replay_memory, replay_memory_size, minibatch_size, 4, self.mode, self.alpha, self.beta, self.sort_term)
+        uniform_replay_memory = ReplayMemory(self.args, self.state_dtype, self.continuous_action, self.action_group_no)            
+        manager = SamplingManager(self.args, uniform_replay_memory)
         for i in range(data_len):
             state = np.zeros((84, 84), dtype=np.int)
             state.fill(i)

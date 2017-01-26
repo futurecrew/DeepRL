@@ -179,13 +179,9 @@ class Client(object):
                     os.system(u'pkill %s' % self.bin)
                     time.sleep(1.0)
                     if self.vision is False:
-                        # DJDJ
-                        #os.system(u'torcs -nofuel -nodamage -nolaptime &')
                         command = '%s -p %s -nofuel -nolaptime &' % (self.bin, self.port)
                         os.system(command)
                     else:
-                        # DJDJ
-                        #os.system(u'torcs -nofuel -nodamage -nolaptime -vision &')
                         command = '%s -p %s -nofuel -nolaptime -vision &' % (self.bin, self.port)
                         os.system(command)
 

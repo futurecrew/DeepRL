@@ -247,7 +247,7 @@ class DeepRLPlayer:
                 self.replay_memory.add_to_history_buffer(state)
     
     def resize_screen(self, state):
-        if len(state.shape) != 2:
+        if len(state.shape) < 2:
             return state
         elif state.shape[0] == self.args.screen_height and state.shape[1] == self.args.screen_width:
             return state
