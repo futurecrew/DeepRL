@@ -31,9 +31,13 @@ In my PC (i7 CPU, Titan-X Maxwell),
 
 
 ## Torcs
-[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/RfAJCkJ8d2s/0.jpg)](https://youtu.be/RfAJCkJ8d2s?t=0s)
+
+<a href="http://www.youtube.com/watch?feature=player_embedded&v=RfAJCkJ8d2s" target="_blank"><img src="https://img.youtube.com/vi/RfAJCkJ8d2s/0.jpg" width="560" height="315" border="10" /></a>
+
+
 <br>
 After 1 hour training in simulator Torcs, it learns how to accelerate and turn the steering wheel.
+<br>
 Click the image to watch the video.
 
 ## Requirements
