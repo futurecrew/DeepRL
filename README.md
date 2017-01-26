@@ -4,22 +4,29 @@ This project implements deep reinforcement learning algorithms including followi
   - Deep Q Network (Human-level control through deep reinforcement learning) 
   - Deep Reinforcement Learning with Double Q-learning
   - Asynchronous Methods for Deep Reinforcement Learning
-  - Prioritized Experience Replay (in working)
+  - Prioritized Experience Replay
 
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="300">
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.gif" width="300">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="280">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.gif" width="280">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/hero.gif" width="280">
 
 
 
 ## Test scores
+In my PC (i7 CPU, Titan-X Maxwell),
+<p>
 <nobr>
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="420">
-<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.png" width="400">
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.png" width="420">
 </nobr>
+  - A3C FF took 20 hours for 80M global steps (nips network)
+  - A3C LSTM took 44 hours for 80M global steps (nips network)
 
-In my PC (i7 CPU, Titan-X Maxwell),
-  - A3C FF took 20 hours (4.00M global steps/hour)
-  - A3C LSTM took 44 hours (1.84M global steps/hour)
+<p>
+<img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/hero_priority.png" width="420">
+  - DQN took 96 hours for 80M steps (shown 11M steps, nature network)
+  - Double-Q took 112 hours for 80M steps (shown 11M steps, nature network)
+  - Prioritized took 112 hours for 80M steps (shown 11M steps, nature network)
 
 ## Requirements
   - Python-2.7
@@ -33,10 +40,11 @@ In my PC (i7 CPU, Titan-X Maxwell),
   
 ## How to train
 ```
-DQN        : python deep_rl_train.py /path/to/rom --drl dqn
-Double DQN : python deep_rl_train.py /path/to/rom --drl double_dqn
-A3C FF     : python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8
-A3C LSTM   : python deep_rl_train.py /path/to/rom --drl a3c_lstm --thread-no 8
+DQN         : python deep_rl_train.py /path/to/rom --drl dqn
+Double DQN  : python deep_rl_train.py /path/to/rom --drl double_dqn
+Prioritized : python deep_rl_train.py /path/to/rom --drl prioritized_rank
+A3C FF      : python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8
+A3C LSTM    : python deep_rl_train.py /path/to/rom --drl a3c_lstm --thread-no 8
 ```
   
 ## How to retrain
@@ -47,8 +55,8 @@ ex) python deep_rl_train.py /rom/breakout.bin --drl a3c --thread-no 8 --snapshot
 
 ## How to play
 ```
-python play.py /path/to/rom --snapshot path/to/snapshot_file
-ex) python play.py /rom/space_invaders.bin --snapshot snapshot/space_invaders/20161114_003838/a3c_79993828
+python play.py path/to/snapshot_file
+ex) python play.py snapshot/space_invaders/20161114_003838/a3c_79993828
 ```
 
 ## Debug console commands
