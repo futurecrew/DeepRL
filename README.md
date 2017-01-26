@@ -34,7 +34,7 @@ In my PC (i7 CPU, Titan-X Maxwell),
 [![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/RfAJCkJ8d2s/0.jpg)](https://youtu.be/RfAJCkJ8d2s?t=0s)
 <br>
 After 1 hour training in simulator Torcs, it learns how to accelerate and turn the steering wheel.
-
+Click the image to watch the video.
 
 ## Requirements
   - Python-2.7
