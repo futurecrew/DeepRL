@@ -5,6 +5,7 @@ This project implements deep reinforcement learning algorithms including followi
   - Deep Reinforcement Learning with Double Q-learning
   - Asynchronous Methods for Deep Reinforcement Learning
   - Prioritized Experience Replay
+  - Continuous control with deep reinforcement learning
 
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c_lstm.gif" width="280">
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.gif" width="280">
@@ -28,12 +29,20 @@ In my PC (i7 CPU, Titan-X Maxwell),
   - Double-Q took 112 hours for 80M steps (shown 11M steps, nature network)
   - Prioritized took 112 hours for 80M steps (shown 11M steps, nature network)
 
+
+## Torcs
+[![IMAGE ALT TEXT HERE](https://img.youtube.com/vi/RfAJCkJ8d2s/0.jpg)](https://www.youtube.com/watch?v=RfAJCkJ8d2s)
+<br>
+After 1 hour training in simulator Torcs, it learns how to accelerate and turn the steering wheel.
+
+
 ## Requirements
   - Python-2.7
   - Numpy
-  - Arcade-Learning-Environment
   - Tensorflow-0.11
   - opencv2
+  - Arcade-Learning-Environment
+  - Torcs (optional)
   - Vizdoom (in working)
   <br><br>
   See <a href="INSTALL.md">this</a> for installation.
@@ -45,6 +54,7 @@ Double DQN  : python deep_rl_train.py /path/to/rom --drl double_dqn
 Prioritized : python deep_rl_train.py /path/to/rom --drl prioritized_rank
 A3C FF      : python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8
 A3C LSTM    : python deep_rl_train.py /path/to/rom --drl a3c_lstm --thread-no 8
+DDPG        : python deep_rl_train.py torcs --ddpg
 ```
   
 ## How to retrain
@@ -73,3 +83,4 @@ While training you can send several debug commands in the console.
   - https://github.com/tambetm/simple_dqn
   - https://github.com/miyosuda/async_deep_reinforce
   - https://github.com/muupan/async-rl
+  - https://github.com/yanpanlau/DDPG-Keras-Torcs
