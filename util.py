@@ -16,3 +16,14 @@ class Logger(object):
     def flush(self):
         self.terminal.flush()
         self.log.flush()
+        
+def parse_log(log_file):        
+    for one_line in open(log_file, 'r'):
+        if one_line.startswith('[ Test '):
+            data = one_line.split('avg score: ')[1]
+            print data.split(' elapsed')[0]        
+            
+if __name__ == '__main__':
+    log_file = 'output/hero_20170121_104059.log'
+    parse_log(log_file)
+    
