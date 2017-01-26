@@ -1,7 +1,7 @@
 import argparse
 import pickle
 from env.arguments import get_args
-from deep_rl_train import DeepRLPlayer
+from train import Trainer
         
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()    
@@ -14,12 +14,12 @@ if __name__ == '__main__':
     
     print 'Play using data_file: %s' % args.snapshot
     with open(args.snapshot + '.pickle') as f:
-        player = pickle.load(f)
-        player.set_global_list(None)
-        player.args.show_screen = True
-        player.args.test_step = 100000
-        player.thread_no = 0
-        player.initialize_post()
-        player.model_runner.load(args.snapshot + '.weight')
-        player.test(0)
+        trainer = pickle.load(f)
+        trainer.set_global_list(None)
+        trainer.args.show_screen = True
+        trainer.args.test_step = 100000
+        trainer.thread_no = 0
+        trainer.initialize_post()
+        trainer.model_runner.load(args.snapshot + '.weight')
+        trainer.test(0)
     

@@ -1,4 +1,4 @@
-# deep_rl_train.py
+# train.py
 # Author: Daejoong Kim
 
 import os
@@ -20,7 +20,7 @@ from network_model.model_tf_ddpg import ModelRunnerTFDdpg
 from network_model.model_tf import Model, ModelRunnerTF
 from env.arguments import get_args, get_env
 
-class DeepRLPlayer:
+class Trainer:
     def __init__(self, args, play_file=None, thread_no=0, global_list=None):
         self.args = args
         self.play_file = play_file
@@ -763,7 +763,7 @@ if __name__ == '__main__':
         else:
             for i in range(args.thread_no):        
                 print 'creating a thread[%s]' % i
-                player = DeepRLPlayer(args, thread_no= i, global_list=global_list)
+                player = Trainer(args, thread_no= i, global_list=global_list)
                 playerList.append(player)
 
             model.init_global(global_sess)
@@ -792,7 +792,7 @@ if __name__ == '__main__':
                 player.model_runner.load(save_file + '.weight')
                 player.train()
         else:
-            player = DeepRLPlayer(args)
+            player = Trainer(args)
             player.total_step = 0
             player.train()
             
