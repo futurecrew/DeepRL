@@ -52,18 +52,18 @@ Click the image to watch the video.
   
 ## How to train
 ```
-DQN         : python deep_rl_train.py /path/to/rom --drl dqn
-Double DQN  : python deep_rl_train.py /path/to/rom --drl double_dqn
-Prioritized : python deep_rl_train.py /path/to/rom --drl prioritized_rank
-A3C FF      : python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8
-A3C LSTM    : python deep_rl_train.py /path/to/rom --drl a3c_lstm --thread-no 8
-DDPG        : python deep_rl_train.py torcs --ddpg
+DQN         : python train.py /path/to/rom --drl dqn
+Double DQN  : python train.py /path/to/rom --drl double_dqn
+Prioritized : python train.py /path/to/rom --drl prioritized_rank
+A3C FF      : python train.py /path/to/rom --drl a3c --thread-no 8
+A3C LSTM    : python train.py /path/to/rom --drl a3c_lstm --thread-no 8
+DDPG        : python train.py torcs --ddpg
 ```
   
 ## How to retrain
 ```
-python deep_rl_train.py /path/to/rom --drl a3c --thread-no 8 --snapshot path/to/snapshot_file
-ex) python deep_rl_train.py /rom/breakout.bin --drl a3c --thread-no 8 --snapshot snapshot/breakout/20161114_003838/a3c_6250000
+python train.py /path/to/rom --drl a3c --thread-no 8 --snapshot path/to/snapshot_file
+ex) python train.py /rom/breakout.bin --drl a3c --thread-no 8 --snapshot snapshot/breakout/20161114_003838/a3c_6250000
 ```
 
 ## How to play
