@@ -1,4 +1,4 @@
-## This guide shows how to install Torcs environment in Ubuntu.
+## How to install Torcs environment in Ubuntu
 
 - This project is tested in python-2.7 and Ubuntu 14.04.
   <br>
