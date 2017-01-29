@@ -1,4 +1,4 @@
-## This guide shows how to install torcs environment in Ubuntu.
+## This guide shows how to install Torcs environment in Ubuntu.
 
 - This project is tested in python-2.7 and Ubuntu 14.04.
   <br>
@@ -6,6 +6,7 @@
 - xautomation (http://linux.die.net/man/7/xautomation)
   <br>
   sudo apt-get update
+  <br>
   sudo apt-get install xautomation
 - sudo apt-get install libglib2.0-dev  libgl1-mesa-dev libglu1-mesa-dev  freeglut3-dev  libplib-dev  libopenal-dev libalut-dev libxi-dev libxmu-dev libxrender-dev  libxrandr-dev libpng12-dev 
 - Gym-TORCS
