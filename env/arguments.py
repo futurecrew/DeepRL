@@ -1,3 +1,4 @@
+import sys
 import argparse
 import importlib
 
@@ -22,30 +23,29 @@ def get_args():
     parser.add_argument('--device', type=str, default='', help='gpu or cpu')
     parser.add_argument('--show-screen', action='store_true', help='whether to show display or not')
 
-    # args for Torcs
-    parser.add_argument('--vision', action='store_true', help='use vision input or not')
-    parser.add_argument('--bin', type=str, default='torcs', help='torcs executable') 
-    parser.add_argument('--port', type=int, default=-1, help='port to be used for torcs server')
-    parser.add_argument('--track', type=int, default=-1, help='track file no')
+    if len(sys.argv) < 2:
+        raise ValueError('Need arguments to run.')
     
-    # args for Vizdoom
-    parser.add_argument('--config', type=str, default=None, help='config file for vizdoom')
+    env = sys.argv[1]
+    if env.endswith('.bin'):
+        module = importlib.import_module('env.ale.ale_env')
+    else:
+        if env == 'torcs':
+            parser.add_argument('--vision', action='store_true', help='use vision input or not')
+            parser.add_argument('--bin', type=str, default='torcs', help='torcs executable') 
+            parser.add_argument('--port', type=int, default=3001, help='port to be used for torcs server')
+            parser.add_argument('--track', type=int, default=-1, help='track file no')
+        elif env == 'vizdoom':
+            parser.add_argument('--config', type=str, default=None, help='config file for vizdoom')
     
+        module = importlib.import_module('env.%s.%s_env' % (env, env))
+
     parser.set_defaults(show_screen=False)
     parser.set_defaults(ddpg=False)
     
     args = parser.parse_args()
-    args.game = get_game_name(args.env)
-    
-    if args.env.endswith('.bin'):
-        module = importlib.import_module('env.ale.ale_env')
-        game_folder = args.env.split('/')[-1]
-        if '.' in game_folder:
-            game_folder = game_folder.split('.')[0]
-        args.snapshot_folder = 'snapshot/' + game_folder
-    else:
-        module = importlib.import_module('env.%s.%s_env' % (args.env, args.env))
-        args.snapshot_folder = 'snapshot/' + args.env
+    args.game = get_game_name(env)
+    args.snapshot_folder = 'snapshot/' + args.game
 
     init_func = getattr(module, 'initialize_args')
     init_func(args)
