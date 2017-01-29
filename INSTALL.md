@@ -29,8 +29,13 @@
   <br>
   https://github.com/mgbellemare/Arcade-Learning-Environment
   
+- Torcs
+  <br>
+  See the following instruction.
+  <br>
+  https://github.com/only4hj/DeepRL/blob/master/env/torcs/INSTALL.md
+  
 - DeepRL
   <br>
-  Download this project. Enjoy :)
-  <br>
-  https://github.com/only4hj/DeepRL.git
+  Download and run this project. Enjoy :)
+  
