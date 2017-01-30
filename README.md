@@ -32,9 +32,9 @@ In my PC (i7 CPU, Titan-X Maxwell),
 
 ## Torcs
 
-<a href="http://www.youtube.com/watch?feature=player_embedded&v=RfAJCkJ8d2s" target="_blank"><img src="https://raw.githubusercontent.com/only4hj/DeepRL/master/snapshot/torcs-1.png" width="560" height="315" border="10" /></a>
+<a href="https://www.youtube.com/watch?v=CtuDq1SmwJM&feature=youtu.be" target="_blank"><img src="https://raw.githubusercontent.com/only4hj/DeepRL/master/snapshot/torcs-1.png" width="560" height="315" border="10" /></a>
 
-After 1 hour training in simulator Torcs, it learns how to accelerate and turn the steering wheel.
+After training in simulator Torcs, it learns how to accelerate, brake and turn the steering wheel.
 <br>
 Click the image to watch the video.
 <br>
