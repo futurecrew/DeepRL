@@ -27,8 +27,8 @@ class TorcsEnv():
         self.gear_change = True
         self.initial_run = True
         
-        #self.action_group_no = 3         # steering, accel, brake
-        self.action_group_no = 2         # steering, accel
+        self.action_group_no = 3         # steering, accel, brake
+        #self.action_group_no = 2         # steering, accel
         
     def initialize(self):
         self.reset_game(True)
@@ -58,7 +58,7 @@ class TorcsEnv():
             self.client.R.d['meta'] = True
             self.client.respond_to_server()
 
-        if relaunch or self.reset_count % 200 == 0:
+        if relaunch or self.reset_count % 100 == 0:
             os.system('pkill %s' % self.bin)
             time.sleep(0.5)
             if self.vision is True:
@@ -70,9 +70,7 @@ class TorcsEnv():
             os.system('sh %s' % self.track_file)
             time.sleep(0.5)
 
-        # Modify here if you use multiple tracks in the environment
         self.client = snakeoil3.Client(self.bin, p=self.port, vision=self.vision, track_file=self.track_file)  # Open new UDP in vtorcs
-        #self.client = snakeoil3.Client(self.bin, p=self.port, vision=self.vision, track_file=self.track_file, s=2)  # Open new UDP in vtorcs
         self.client.MAX_STEPS = np.inf
 
         client = self.client
@@ -129,7 +127,19 @@ class TorcsEnv():
             self.client.R.d['brake'] = actions[2]
         else:
             self.client.R.d['brake'] = 0
-        #self.client.R.d['gear'] = 1
+        
+        # Automatic Transmission
+        self.client.R.d['gear']=1
+        if self.client.S.d['speedX']>50:
+            self.client.R.d['gear']=2
+        if self.client.S.d['speedX']>80:
+            self.client.R.d['gear']=3
+        if self.client.S.d['speedX']>110:
+            self.client.R.d['gear']=4
+        if self.client.S.d['speedX']>140:
+            self.client.R.d['gear']=5
+        if self.client.S.d['speedX']>170:
+            self.client.R.d['gear']=6
         
         self.client.respond_to_server()
         ret = self.client.get_servers_input()

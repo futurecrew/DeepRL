@@ -56,12 +56,12 @@ class ModelRunnerTFDdpg(ModelRunnerTF):
                 self.update_target_list.append(self.vars_target[i].assign(self.update_t * self.vars[i] + (1-self.update_t) * self.vars_target[i]))
             self.update_target = tf.group(*self.update_target_list)
     
-            self.critic_y_ = tf.placeholder(tf.float32, [None, 1])
+            self.critic_y_ = tf.placeholder(tf.float32, [None])
             self.critic_grads_in = tf.placeholder(tf.float32, [None, action_group_no])
     
             optimizer_critic = tf.train.AdamOptimizer(0.001)
             self.critic_grads = tf.gradients(self.critic_y, self.action_in)
-            self.difference = tf.abs(self.critic_y_ - self.critic_y)
+            self.difference = tf.abs(self.critic_y_ - tf.reshape(self.critic_y, [-1]))
             quadratic_part = tf.clip_by_value(self.difference, 0.0, 1.0)
             linear_part = self.difference - quadratic_part
             self.errors = (0.5 * tf.square(quadratic_part)) + linear_part
@@ -85,7 +85,6 @@ class ModelRunnerTFDdpg(ModelRunnerTF):
         return self.sess.run(self.actor_y, {self.x_in: history_buffer})[0]
     
     def print_weights(self):
-        #for var in self.actor_vars + self.critic_vars:
         for var in self.vars:
             print ''
             print '[ ' + var.name + ']'
@@ -108,7 +107,7 @@ class ModelRunnerTFDdpg(ModelRunnerTF):
             self.action_in_target: actions_post
         })
         
-        y_ = np.zeros((self.train_batch_size, 1))
+        y_ = np.zeros((self.train_batch_size))
         
         for i in range(self.train_batch_size):
             if self.args.clip_reward:
@@ -120,11 +119,23 @@ class ModelRunnerTFDdpg(ModelRunnerTF):
             else:
                 y_[i] = reward + self.discount_factor * y2[i]
 
-        self.sess.run([self.critic_step], feed_dict={
-            self.x_in: prestates,
-            self.action_in: actions,
-            self.critic_y_: y_
-        })
+        if self.args.prioritized_replay == True:
+            delta_value, _ = self.sess.run([self.difference, self.critic_step], feed_dict={
+                self.x_in: prestates,
+                self.action_in: actions,
+                self.critic_y_: y_,
+                self.priority_weight: weights
+            })
+            for i in range(self.train_batch_size):
+                replay_memory.update_td(heap_indexes[i], abs(delta_value[i]))
+                #if debug:
+                #    print 'weight[%s]: %.5f, delta: %.5f, newDelta: %.5f' % (i, weights[i], delta_value[i], weights[i] * delta_value[i]) 
+        else:
+            self.sess.run([self.critic_step], feed_dict={
+                self.x_in: prestates,
+                self.action_in: actions,
+                self.critic_y_: y_
+            })
         
         actor_y_value = self.sess.run(self.actor_y, feed_dict={
             self.x_in: prestates,
@@ -227,7 +238,7 @@ class ModelTorcsPixel(Model):
     
             with tf.variable_scope('actor'):
                 W_conv1, b_conv1 = self.make_layer_variables([6, 6, self.history_len, 32], trainable, "conv1")
-                h_conv1 = tf.nn.relu(tf.nn.conv2d(self.x_normalized, W_conv1, strides=[1, 3, 3, 1], padding='VALID') + b_conv1, name="h_conv1")
+                h_conv1 = tf.nn.relu(tf.nn.conv2d(self.x_normalized, W_conv1, strides=[1, 2, 2, 1], padding='VALID') + b_conv1, name="h_conv1")
                 self.print_log(h_conv1)
         
                 W_conv2, b_conv2 = self.make_layer_variables([3, 3, 32, 32], trainable, "conv2")
