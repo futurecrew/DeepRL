@@ -21,9 +21,9 @@
   <br>
   make
   <br>
-  make install
+  sudo make install
   <br>
-  make datainstall
+  sudo make datainstall
 
 - Initialization of the Race
   <br>
