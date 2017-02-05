@@ -20,8 +20,6 @@
   sudo apt-get install python-pillow
   <br>
   sudo apt-get install python-matplotlib
-  <br>
-  sudo apt-get install python-opencv
 
 - tensorflow
   <br>
