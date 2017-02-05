@@ -21,5 +21,5 @@ if __name__ == '__main__':
         trainer.thread_no = 0
         trainer.initialize_post()
         trainer.model_runner.load(args.snapshot + '.weight')
-        trainer.test(0)
+        trainer.test(0, 0.05)
     

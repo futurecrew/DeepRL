@@ -4,7 +4,9 @@
 import os
 import numpy as np
 import random
-import cv2
+from scipy.misc import imresize
+from matplotlib import pyplot as plt
+import multiprocessing
 import pickle
 import sys
 import threading
@@ -39,7 +41,10 @@ class Trainer:
                                       self.args.screen_height, 
                                       self.args.screen_width)
 
-        self.blank_screen = np.zeros((self.args.screen_height, self.args.screen_width))
+        if self.args.use_color_input:
+            self.blank_screen = np.zeros((self.args.screen_height, self.args.screen_width, 3))
+        else:
+            self.blank_screen = np.zeros((self.args.screen_height, self.args.screen_width))
         self.total_step = 0
         self.epoch_done = 0
         self.next_test_thread_no = 0
@@ -235,7 +240,7 @@ class Trainer:
             for _ in range(random.randint(4, 30)):
                 self.do_actions(action_index, 'TRAIN')
 
-        first_state = self.resize_screen(self.env.getScreenGrayscale())
+        first_state = self.resize_screen(self.env.getState())
         for i in range(self.args.screen_history):
             if i < self.args.screen_history - 1:
                 state = self.blank_screen
@@ -252,19 +257,16 @@ class Trainer:
         elif state.shape[0] == self.args.screen_height and state.shape[1] == self.args.screen_width:
             return state
         else:
-            resized = cv2.resize(state, (self.args.screen_width, self.args.screen_height))
+            resized = imresize(state, (self.args.screen_height, self.args.screen_width))           
             return resized
         
     def do_actions(self, action_index, mode):
         global debug_display
-        global debug_display_sleep
         
         if self.thread_no == 0:
             _debug_display = debug_display
-            _debug_display_sleep = debug_display_sleep
         else:
             _debug_display = False
-            _debug_display_sleep = 0
         
         if self.env.continuous_action:
             action = action_index
@@ -278,7 +280,7 @@ class Trainer:
 
         if frame_repeat == 1 or self.args.use_env_frame_skip == True:
             reward += self.env.act(action)
-            new_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
+            new_state = self.env.getState(_debug_display, self.debug_input)
             game_over = self.env.game_over()
             if (self.args.lost_life_terminal == True and self.env.lives() < lives) or game_over:
                 terminal = True
@@ -286,11 +288,11 @@ class Trainer:
                     game_over = True
         else:
             if self.current_state is None:
-                self.current_state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)                
+                self.current_state = self.env.getState(_debug_display, self.debug_input)                
             for _ in range(frame_repeat):
                 prev_state = self.current_state
                 reward += self.env.act(action)
-                state = self.env.getScreenGrayscale(_debug_display, _debug_display_sleep)
+                state = self.env.getState(_debug_display, self.debug_input)
                 if state is not None:
                     self.current_state = state 
                 game_over = self.env.game_over()
@@ -322,7 +324,7 @@ class Trainer:
 
             if debug_quit:
                 return
-        
+            
         if self.thread_no == 0:
             print 'Generating replay memory took %.0f sec' % (time.time() - start_time)
         
@@ -332,7 +334,7 @@ class Trainer:
             while debug_pause:
                 time.sleep(1.0)
         
-    def test(self, epoch):
+    def test(self, epoch, frame_sleep_time=0):
         global debug_print
         global debug_quit
         
@@ -350,6 +352,9 @@ class Trainer:
 
             self.replay_memory.add_to_history_buffer(state)
             
+            if frame_sleep_time > 0:
+                time.sleep(frame_sleep_time)
+                
             if(game_over):
                 episode += 1
                 total_reward += episode_reward
@@ -383,6 +388,7 @@ class Trainer:
         
         if replay_memory_no == None:
             replay_memory_no = self.args.train_start
+        replay_memory_no = min(replay_memory_no, self.args.max_replay_memory)
         if replay_memory_no > 0:
             self.generate_replay_memory(replay_memory_no)
         
@@ -583,7 +589,7 @@ class Trainer:
             
             self.epoch_done = epoch
 
-            print "[ Train %s ] avg score: %.2f elapsed: %.0fm. rl: %.5f" % \
+            print "[ Train %s ] avg score: %.2f elapsed: %.0fm. lr: %.5f" % \
                   (epoch, float(epoch_total_reward) / episode, 
                    (time.time() - epoch_start_time) / 60, learning_rate)
                 
@@ -633,21 +639,43 @@ class Trainer:
             del d['debug_input']
         return d
         
+class DrawImage:
+    def image_receiver(self):
+        while self.running:
+            command, data = self.q.get()
+            if command == 'quit':
+                self.q  = None
+                plt.close()
+                break
+            self.im.set_data(data)
+            self.fig.canvas.draw()
+
+    def draw_image(self, q, blank_img):
+        self.q = q
+        self.running = True
+        self.fig = plt.figure()
+        self.im = plt.imshow(blank_img, cmap='gray', vmin=0, vmax=255)
+        
+        t = threading.Thread(target = self.image_receiver)
+        t.start()
+        plt.show()
+        
 class DebugInput(threading.Thread):
     def __init__(self, player):
         threading.Thread.__init__(self)
         self.player = player
         self.running = True
+        self.state_q = None
+        self.display_sleep = 0.1
     
     def run(self):
         global debug_print
         global debug_print_step
         global debug_pause
         global debug_display
-        global debug_display_sleep
         global debug_quit
         
-        time.sleep(10)
+        time.sleep(5)
         while (self.running):
             rlist, _, _ = select([sys.stdin], [], [], 1)
             if rlist:
@@ -663,24 +691,31 @@ class DebugInput(threading.Thread):
                 print 'Debug pause : %s' % debug_pause
             elif key_input == 'd' or key_input == 'dd':
                 if debug_display == False:
-                    cv2.namedWindow('image', cv2.WINDOW_NORMAL)
+                    self.state_q = multiprocessing.Queue()
+                    draw = DrawImage()
+                    p = multiprocessing.Process(target=draw.draw_image, args=(self.state_q, self.player.blank_screen))
+                    p.daemon = True
+                    p.start()
                     debug_display = True
                 else:
                     debug_display = False
-                    cv2.destroyAllWindows()                    
+                    time.sleep(1.0)
+                    self.state_q.put(('quit', ''))
+                    self.state_q.close()
+
                 print 'Debug display : %s' % debug_display
                 if key_input == 'dd':
                     debug_print_step = not debug_print_step
                     np.set_printoptions(formatter={'float': '{: 0.3f}'.format})                    
                     print 'Debug mode'
             elif key_input == '-':
-                debug_display_sleep -= 20
-                debug_display_sleep = max(1, debug_display_sleep)
-                print 'Debug display_sleep : %s' % debug_display_sleep
+                self.display_sleep -= 0.1
+                self.display_sleep = max(0.01, self.display_sleep)
+                print 'Debug display_sleep : %s' % self.display_sleep
             elif key_input == '+':
-                debug_display_sleep += 20
-                debug_display_sleep = min(5000, debug_display_sleep)
-                print 'Debug display_sleep : %s' % debug_display_sleep
+                self.display_sleep += 0.1
+                self.display_sleep = min(1.0, self.display_sleep)
+                print 'Debug display_sleep : %s' % self.display_sleep
             elif key_input == 'e':
                 self.player.print_env()
             elif key_input == 'w':
@@ -689,8 +724,15 @@ class DebugInput(threading.Thread):
                 print 'Quiting...'
                 debug_quit = True
                 debug_pause = False
+                if debug_display:
+                    self.state_q.put(('quit', ''))
                 break
-                
+
+    def show(self, data):
+        if self.state_q.empty():
+            self.state_q.put(('data', data))
+            time.sleep(self.display_sleep)
+
     def finish(self):
         self.running = False
     
@@ -698,7 +740,6 @@ debug_print = False
 debug_print_step = False
 debug_pause = False
 debug_display = False
-debug_display_sleep = 300
 debug_quit = False
 global_data = []
 global_step_no = 0
@@ -716,11 +757,11 @@ if __name__ == '__main__':
         
         # initialize global settings
         if args.drl == 'a3c':
-            model = ModelA3C(args, 'global', True,  len(legal_actions), thread_no = -1)
+            model = ModelA3C(args, 'global', len(legal_actions), thread_no = -1)
         elif args.drl == 'a3c_lstm':     
-            model = ModelA3CLstm(args, 'global', True,  len(legal_actions), thread_no = -1)
+            model = ModelA3CLstm(args, 'global', len(legal_actions), thread_no = -1)
         elif args.drl == '1q':     
-            model = Model(args, 'global', True, len(legal_actions), thread_no = -1)
+            model = Model(args, 'global', len(legal_actions), thread_no = -1)
 
         global_list = model.prepare_global(args.rms_decay, args.rms_epsilon)
         global_sess = global_list[0]

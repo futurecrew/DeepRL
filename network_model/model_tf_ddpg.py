@@ -25,11 +25,11 @@ class ModelRunnerTFDdpg(ModelRunnerTF):
         with tf.device(self.args.device):
             if self.args.env == 'torcs':
                 if self.args.vision:
-                    model_policy = ModelTorcsPixel(self.args, "policy", True, action_group_no, self.thread_no)
-                    model_target = ModelTorcsPixel(self.args, "target", False, action_group_no, self.thread_no)
+                    model_policy = ModelTorcsPixel(self.args, "policy", action_group_no, self.thread_no)
+                    model_target = ModelTorcsPixel(self.args, "target", action_group_no, self.thread_no)
                 else:
-                    model_policy = ModelTorcsLowDim(self.args, "policy", True, action_group_no, self.thread_no)
-                    model_target = ModelTorcsLowDim(self.args, "target", False, action_group_no, self.thread_no)
+                    model_policy = ModelTorcsLowDim(self.args, "policy", action_group_no, self.thread_no)
+                    model_target = ModelTorcsLowDim(self.args, "target", action_group_no, self.thread_no)
             else:
                 raise ValueError('env %s is not supported.' % self.args.env)
             
@@ -161,7 +161,7 @@ class ModelRunnerTFDdpg(ModelRunnerTF):
 
 
 class ModelTorcsLowDim(Model):
-    def build_network(self, name, network, trainable, action_group_no):
+    def build_network(self, name, network, action_group_no):
         self.print_log('Building network for ModelTorcsLowDim')
     
         with tf.variable_scope(name):
@@ -172,25 +172,25 @@ class ModelTorcsLowDim(Model):
         
             # Actor network
             with tf.variable_scope('actor'):
-                W_actor_fc1, b_actor_fc1 = self.make_layer_variables([input_img_size, 600], trainable, "actor_fc1")    
+                W_actor_fc1, b_actor_fc1 = self.make_layer_variables([input_img_size, 600], "actor_fc1")    
                 h_actor_fc1 = tf.nn.relu(tf.matmul(x_flat, W_actor_fc1) + b_actor_fc1, name="h_actor_fc1")
                 self.print_log(h_actor_fc1)
         
-                W_actor_fc2, b_actor_fc2 = self.make_layer_variables([600, 400], trainable, "actor_fc2")    
+                W_actor_fc2, b_actor_fc2 = self.make_layer_variables([600, 400], "actor_fc2")    
                 h_actor_fc2 = tf.nn.relu(tf.matmul(h_actor_fc1, W_actor_fc2) + b_actor_fc2, name="h_actor_fc2")
                 self.print_log(h_actor_fc2)
                 
                 weight_range = 3 * 10 ** -3
-                W_steering, b_steering = self.make_layer_variables([400, 1], trainable, "steering", weight_range)    
+                W_steering, b_steering = self.make_layer_variables([400, 1], "steering", weight_range)    
                 h_steering = tf.tanh(tf.matmul(h_actor_fc2, W_steering) + b_steering, name="h_steering")
                 self.print_log(h_steering)
                 
-                W_acc, b_acc = self.make_layer_variables([400, 1], trainable, "acc", weight_range)
+                W_acc, b_acc = self.make_layer_variables([400, 1], "acc", weight_range)
                 h_acc = tf.sigmoid(tf.matmul(h_actor_fc2, W_acc) + b_acc, name="h_acc")
                 self.print_log(h_acc)
                 
                 if action_group_no == 3:
-                    W_brake, b_brake = self.make_layer_variables([400, 1], trainable, "brake", weight_range)    
+                    W_brake, b_brake = self.make_layer_variables([400, 1], "brake", weight_range)    
                     h_brake = tf.sigmoid(tf.matmul(h_actor_fc2, W_brake) + b_brake, name="h_brake")
                     self.print_log(h_brake)
                     actor_y = tf.concat(1, [h_steering, h_acc, h_brake])
@@ -201,17 +201,17 @@ class ModelTorcsLowDim(Model):
             # Critic network    
             action_in = tf.placeholder(tf.float32, shape=[None, action_group_no], name="actions")
             with tf.variable_scope('critic'):
-                W_critic_fc1, b_critic_fc1 = self.make_layer_variables([input_img_size, 600], trainable, "critic_fc1")    
+                W_critic_fc1, b_critic_fc1 = self.make_layer_variables([input_img_size, 600], "critic_fc1")    
                 h_critic_fc1 = tf.nn.relu(tf.matmul(x_flat, W_critic_fc1) + b_critic_fc1, name="h_critic_fc1")
                 self.print_log(h_critic_fc1)
     
                 h_concat = tf.concat(1, [h_critic_fc1, action_in])
             
-                W_critic_fc2, b_critic_fc2 = self.make_layer_variables([600 + action_group_no, 400], trainable, "critic_fc2")    
+                W_critic_fc2, b_critic_fc2 = self.make_layer_variables([600 + action_group_no, 400], "critic_fc2")    
                 h_critic_fc2 = tf.nn.relu(tf.matmul(h_concat, W_critic_fc2) + b_critic_fc2, name="h_critic_fc2")
                 self.print_log(h_critic_fc2)
     
-                W_critic_fc3, b_critic_fc3 = self.make_layer_variables([400, 1], trainable, "critic_fc3", weight_range)
+                W_critic_fc3, b_critic_fc3 = self.make_layer_variables([400, 1], "critic_fc3", weight_range)
                 critic_y = tf.matmul(h_critic_fc2, W_critic_fc3) + b_critic_fc3
                 self.print_log(critic_y)
                         
@@ -228,7 +228,7 @@ class ModelTorcsLowDim(Model):
                           
 
 class ModelTorcsPixel(Model):
-    def build_network(self, name, network, trainable, action_group_no):
+    def build_network(self, name, network, action_group_no):
         self.print_log('Building network ModelTorcsPixel')
     
         with tf.variable_scope(name):
@@ -237,15 +237,15 @@ class ModelTorcsPixel(Model):
             self.print_log(self.x_normalized)
     
             with tf.variable_scope('actor'):
-                W_conv1, b_conv1 = self.make_layer_variables([6, 6, self.history_len, 32], trainable, "conv1")
+                W_conv1, b_conv1 = self.make_layer_variables([6, 6, self.history_len, 32], "conv1")
                 h_conv1 = tf.nn.relu(tf.nn.conv2d(self.x_normalized, W_conv1, strides=[1, 2, 2, 1], padding='VALID') + b_conv1, name="h_conv1")
                 self.print_log(h_conv1)
         
-                W_conv2, b_conv2 = self.make_layer_variables([3, 3, 32, 32], trainable, "conv2")
+                W_conv2, b_conv2 = self.make_layer_variables([3, 3, 32, 32], "conv2")
                 h_conv2 = tf.nn.relu(tf.nn.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2, name="h_conv2")
                 self.print_log(h_conv2)
         
-                W_conv3, b_conv3 = self.make_layer_variables([3, 3, 32, 32], trainable, "conv3")
+                W_conv3, b_conv3 = self.make_layer_variables([3, 3, 32, 32], "conv3")
                 h_conv3 = tf.nn.relu(tf.nn.conv2d(h_conv2, W_conv3, strides=[1, 2, 2, 1], padding='VALID') + b_conv3, name="h_conv3")
                 self.print_log(h_conv3)
         
@@ -253,27 +253,27 @@ class ModelTorcsPixel(Model):
                 h_conv3_flat = tf.reshape(h_conv3, [-1, conv_out_size], name="h_conv3_flat")
                 self.print_log(h_conv3_flat)
         
-                W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 600], trainable, "fc1")
+                W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 600], "fc1")
                 fc1_temp = tf.matmul(h_conv3_flat, W_fc1) + b_fc1
                 h_fc1 = tf.nn.relu(fc1_temp, name="h_fc1")
                 self.print_log(h_fc1)
         
-                W_fc2, b_fc2 = self.make_layer_variables([600, 400], trainable, "fc2")
+                W_fc2, b_fc2 = self.make_layer_variables([600, 400], "fc2")
                 h_fc2 = tf.nn.relu(tf.matmul(h_fc1, W_fc2) + b_fc2, name="h_fc2")
                 self.print_log(h_fc2)
                 
                 # Actor specific network
                 weight_range = 3 * 10 ** -4
-                W_steering, b_steering = self.make_layer_variables([400, 1], trainable, "steering", weight_range)    
+                W_steering, b_steering = self.make_layer_variables([400, 1], "steering", weight_range)    
                 h_steering = tf.tanh(tf.matmul(h_fc2, W_steering) + b_steering, name="h_steering")
                 self.print_log(h_steering)
                 
-                W_acc, b_acc = self.make_layer_variables([400, 1], trainable, "acc", weight_range)    
+                W_acc, b_acc = self.make_layer_variables([400, 1], "acc", weight_range)    
                 h_acc = tf.sigmoid(tf.matmul(h_fc2, W_acc) + b_acc, name="h_acc")
                 self.print_log(h_acc)
                 
                 if action_group_no == 3:
-                    W_brake, b_brake = self.make_layer_variables([400, 1], trainable, "brake", weight_range)    
+                    W_brake, b_brake = self.make_layer_variables([400, 1], "brake", weight_range)    
                     h_brake = tf.sigmoid(tf.matmul(h_fc2, W_brake) + b_brake, name="h_brake")
                     self.print_log(h_brake)
                     actor_y = tf.concat(1, [h_steering, h_acc, h_brake])
@@ -284,7 +284,7 @@ class ModelTorcsPixel(Model):
             # Critic specific network    
             action_in = tf.placeholder(tf.float32, shape=[None, action_group_no], name="actions")
             with tf.variable_scope('critic'):
-                W_critic_fc1, b_critic_fc1 = self.make_layer_variables([action_group_no, 600], trainable, "critic_fc1")
+                W_critic_fc1, b_critic_fc1 = self.make_layer_variables([action_group_no, 600], "critic_fc1")
                 critic_fc1_temp = tf.matmul(action_in, W_critic_fc1) + b_critic_fc1
                 self.print_log(critic_fc1_temp)
                 
@@ -294,7 +294,7 @@ class ModelTorcsPixel(Model):
                 self.h_critic_fc2 = tf.nn.relu(tf.matmul(self.h_critic_fc1, W_fc2) + b_fc2, name="h_critic_fc2")
                 self.print_log(self.h_critic_fc2)
         
-                W_critic_fc3, b_critic_fc3 = self.make_layer_variables([400, 1], trainable, "critic_fc3", weight_range)
+                W_critic_fc3, b_critic_fc3 = self.make_layer_variables([400, 1], "critic_fc3", weight_range)
                 critic_y = tf.matmul(self.h_critic_fc2, W_critic_fc3) + b_critic_fc3
                 self.print_log(critic_y)
                             

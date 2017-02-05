@@ -10,6 +10,7 @@ class ReplayMemory:
     self.size = args.max_replay_memory
     self.minibatch_random = args.minibatch_random
     self.screen_order = args.screen_order
+    self.use_color_input = args.use_color_input
     batch_size = args.train_batch_size
     history_length = args.screen_history
     height = args.screen_height
@@ -21,11 +22,19 @@ class ReplayMemory:
     else:
         self.actions = np.empty(self.size, dtype = np.uint8)
     
+    if args.use_color_input:
+        self.input_channel_no = 3
+    else:
+        self.input_channel_no = history_length
+    
     self.rewards = np.empty(self.size, dtype = np.float32)
     if self.screen_order == 'hws':        # (height, width, size)
-        screen_dim = (height, width, self.size)
-        state_dim = (batch_size, height, width, history_length)
-        self.history_buffer = np.zeros((1, height, width, history_length), dtype=state_dtype)
+        if args.use_color_input:
+            screen_dim = (height, width, self.input_channel_no, self.size)
+        else:
+            screen_dim = (height, width, self.size)
+        state_dim = (batch_size, height, width, self.input_channel_no)
+        self.history_buffer = np.zeros((1, height, width, self.input_channel_no), dtype=state_dtype)
     else:       # (size, height, width)
         screen_dim = (self.size, height, width)
         state_dim = (batch_size, history_length, height, width)
@@ -70,10 +79,13 @@ class ReplayMemory:
     # if is not in the beginning of matrix
     if index >= self.history_length - 1:
         # use faster slicing
-        if self.screen_order == 'hws':        # (height, width, size)
-          return self.screens[..., (index - (self.history_length - 1)):(index + 1)]
-        else:           # (size, height, width)
-          return self.screens[(index - (self.history_length - 1)):(index + 1), ...]
+        if self.use_color_input:
+            return self.screens[..., index]
+        else:
+            if self.screen_order == 'hws':        # (height, width, size)
+              return self.screens[..., (index - (self.history_length - 1)):(index + 1)]
+            else:           # (size, height, width)
+              return self.screens[(index - (self.history_length - 1)):(index + 1), ...]
     else:
       # otherwise normalize indexes and use slower list based access
       indexes = [(index - i) % self.count for i in reversed(range(self.history_length))]
@@ -166,12 +178,15 @@ class ReplayMemory:
     return self.prestates[:data_size_to_ret, ...], actions, rewards, self.poststates[:data_size_to_ret, ...], terminals
 
   def add_to_history_buffer(self, state):
-      if self.screen_order == 'hws':        # (height, width, size)
-          self.history_buffer[0, :, :, :-1] = self.history_buffer[0, :, :, 1:]
-          self.history_buffer[0, :, :, -1] = state
-      else:         # (size, height, width)
-          self.history_buffer[0, :-1, :, :] = self.history_buffer[0, 1:, :, :]
-          self.history_buffer[0, -1, :, :] = state
+        if self.use_color_input:
+            self.history_buffer[0, ...] = state
+        else:
+            if self.screen_order == 'hws':        # (height, width, size)
+                self.history_buffer[0, :, :, :-1] = self.history_buffer[0, :, :, 1:]
+                self.history_buffer[0, :, :, -1] = state
+            else:         # (size, height, width)
+                self.history_buffer[0, :-1, :, :] = self.history_buffer[0, 1:, :, :]
+                self.history_buffer[0, -1, :, :] = state
 
   def clear_history_buffer(self):
         self.history_buffer.fill(0)

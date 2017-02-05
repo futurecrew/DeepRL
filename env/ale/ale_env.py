@@ -53,13 +53,11 @@ class AleEnv():
     def getScreenRGB(self):
         return self.ale.getScreenRGB()
     
-    def getScreenGrayscale(self, debug_display=False, debug_display_sleep=0):
+    def getState(self, debug_display=False, debug_input=None):
         screen = self.ale.getScreenGrayscale()
         if screen is not None and debug_display:
-            import cv2
-            cv2.imshow('image', screen)
-            cv2.waitKey(debug_display_sleep)
-        return screen
+            debug_input.show(screen.reshape(screen.shape[0], screen.shape[1]))
+        return screen.reshape(self.screen_height, self.screen_width)
     
     def act(self, action):
         return self.ale.act(action)
@@ -102,7 +100,8 @@ def initialize_args(args):
     if args.drl in ['a3c_lstm', 'a3c']:
         args.asynchronousRL = True
         args.train_batch_size = 5
-        args.max_replay_memory = 30
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 30
         args.max_epoch = 20
         args.epoch_step = 500000    # 4,000,000 global steps / 8 threads
         args.train_start = 0        
@@ -119,7 +118,8 @@ def initialize_args(args):
         args.max_global_step_no = args.epoch_step * args.max_epoch * args.thread_no
     elif args.drl in ['1q']:
         args.asynchronousRL = True
-        args.max_replay_memory = 10000
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 10000
         args.max_epoch = 20
         args.train_start = 100           # start training after filling this replay memory size
         args.epoch_step = 500000
@@ -145,7 +145,8 @@ def initialize_args(args):
     else:
         args.asynchronousRL = False
         args.train_batch_size = 32
-        args.max_replay_memory = 1000000
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 1000000
         args.max_epoch = 200
         args.epoch_step = 250000
         args.train_start = 50000        # start training after filling this replay memory size

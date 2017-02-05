@@ -113,6 +113,9 @@ class ModelRunnerNeon():
         output  = self.train_net.fprop(self.input, inference=True)
         return output.T.asnumpyarray()[0]            
 
+    def print_weights(self):
+        pass
+
     def train(self, minibatch, replay_memory, learning_rate, debug):
         if self.args.prioritized_replay == True:
             prestates, actions, rewards, poststates, terminals, replay_indexes, heap_indexes, weights = minibatch

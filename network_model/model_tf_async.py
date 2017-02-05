@@ -35,8 +35,8 @@ class ModelRunnerTFAsync(ModelRunnerTF):
         
     def init_models(self):
         with tf.device(self.args.device):
-            model_policy = Model(self.args, "policy", True, self.max_action_no, self.thread_no)
-            model_target = Model(self.args, "target", False, self.max_action_no, self.thread_no)
+            model_policy = Model(self.args, "policy", self.max_action_no, self.thread_no)
+            model_target = Model(self.args, "target", self.max_action_no, self.thread_no)
     
             self.x_in, self.y, self.var_train = model_policy.x, model_policy.y, model_policy.variables
             self.x_target, self.y_target, self.var_target = model_target.x, model_target.y, model_target.variables

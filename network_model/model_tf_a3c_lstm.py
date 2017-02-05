@@ -31,7 +31,7 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
             self.init_gradients(loss, self.model.get_vars())
         
     def new_model(self, name):
-        return ModelA3CLstm(self.args, name, True, self.max_action_no, self.thread_no)
+        return ModelA3CLstm(self.args, name, self.max_action_no, self.thread_no)
                
     def get_loss(self):
         with tf.device(self.args.device):
@@ -77,6 +77,12 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
                         })
         return y_class[0]
 
+    def print_weights(self):
+        for var in self.model.variables:
+            print ''
+            print '[ ' + var.name + ']'
+            print self.sess.run(var)
+            
     def reset_lstm_state(self):
         self.lstm_state_value = self.sess.run(self.lstm_init_state)
 
@@ -128,23 +134,23 @@ class ModelRunnerTFA3CLstm(ModelRunnerTFAsync):
         self.sess.run(self.sync)
       
 class ModelA3CLstm(Model):
-    def build_network_nature(self, name, trainable, num_actions):
-        self.print_log("Building network A3C LSTM nature for %s trainable=%s" % (name, trainable))
+    def build_network_nature(self, name, num_actions):
+        self.print_log("Building network A3C LSTM nature for %s" % (name))
     
         with tf.variable_scope(name):
             x_in = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, self.history_len], name="screens")
             x_normalized = tf.to_float(x_in) / 255.0
             self.print_log(x_normalized)
     
-            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 32], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 32], "conv1")
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             self.print_log(h_conv1)
     
-            W_conv2, b_conv2 = self.make_layer_variables([4, 4, 32, 64], trainable, "conv2")
+            W_conv2, b_conv2 = self.make_layer_variables([4, 4, 32, 64], "conv2")
             h_conv2 = tf.nn.relu(tf.nn.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2, name="h_conv2")
             self.print_log(h_conv2)
     
-            W_conv3, b_conv3 = self.make_layer_variables([3, 3, 64, 64], trainable, "conv3")
+            W_conv3, b_conv3 = self.make_layer_variables([3, 3, 64, 64], "conv3")
             h_conv3 = tf.nn.relu(tf.nn.conv2d(h_conv2, W_conv3, strides=[1, 1, 1, 1], padding='VALID') + b_conv3, name="h_conv3")
             self.print_log(h_conv3)
     
@@ -152,7 +158,7 @@ class ModelA3CLstm(Model):
             h_conv3_flat = tf.reshape(h_conv3, [-1, conv_out_size], name="h_conv3_flat")
             self.print_log(h_conv3_flat)
     
-            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 512], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 512], "fc1")
             h_fc1 = tf.nn.relu(tf.matmul(h_conv3_flat, W_fc1) + b_fc1, name="h_fc1")
             self.print_log(h_fc1)
     
@@ -168,13 +174,13 @@ class ModelA3CLstm(Model):
                 outputs = tf.squeeze(outputs, [1])      # (5, 512)
                 self.print_log('outputs : %s' % outputs) 
                 
-            W_fc2, b_fc2 = self.make_layer_variables([512, num_actions], trainable, "fc2")
+            W_fc2, b_fc2 = self.make_layer_variables([512, num_actions], "fc2")
             y = tf.matmul(outputs, W_fc2) + b_fc2
             self.print_log(y)
             
             y_class = tf.nn.softmax(y)
             
-            W_fc3, b_fc3 = self.make_layer_variables([512, 1], trainable, "fc3")
+            W_fc3, b_fc3 = self.make_layer_variables([512, 1], "fc3")
             v_ = tf.matmul(h_fc1, W_fc3) + b_fc3
             v = tf.reshape(v_, [-1] )
         
@@ -187,19 +193,19 @@ class ModelA3CLstm(Model):
         print 'len(self.variables) : %s' % len(self.variables)
 
         
-    def build_network_nips(self, name, trainable, num_actions):
-        self.print_log("Building network A3C LSTM nips for %s trainable=%s" % (name, trainable))
+    def build_network_nips(self, name, num_actions):
+        self.print_log("Building network A3C LSTM nips for %s" % (name))
     
         with tf.variable_scope(name):
             x_in = tf.placeholder(tf.uint8, shape=[None, self.screen_height, self.screen_width, self.history_len], name="screens")
             x_normalized = tf.to_float(x_in) / 255.0
             self.print_log(x_normalized)
     
-            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 16], trainable, "conv1")
+            W_conv1, b_conv1 = self.make_layer_variables([8, 8, self.history_len, 16], "conv1")
             h_conv1 = tf.nn.relu(tf.nn.conv2d(x_normalized, W_conv1, strides=[1, 4, 4, 1], padding='VALID') + b_conv1, name="h_conv1")
             self.print_log(h_conv1)
     
-            W_conv2, b_conv2 = self.make_layer_variables([4, 4, 16, 32], trainable, "conv2")
+            W_conv2, b_conv2 = self.make_layer_variables([4, 4, 16, 32], "conv2")
             h_conv2 = tf.nn.relu(tf.nn.conv2d(h_conv1, W_conv2, strides=[1, 2, 2, 1], padding='VALID') + b_conv2, name="h_conv2")
             self.print_log(h_conv2)
     
@@ -207,7 +213,7 @@ class ModelA3CLstm(Model):
             h_conv2_flat = tf.reshape(h_conv2, [-1, conv_out_size], name="h_conv2_flat")
             self.print_log(h_conv2_flat)
     
-            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 256], trainable, "fc1")
+            W_fc1, b_fc1 = self.make_layer_variables([conv_out_size, 256], "fc1")
             h_fc1 = tf.nn.relu(tf.matmul(h_conv2_flat, W_fc1) + b_fc1, name="h_fc1")
             self.print_log(h_fc1)
     
@@ -223,13 +229,13 @@ class ModelA3CLstm(Model):
                 outputs = tf.squeeze(outputs, [1])      # (5, 256)
                 self.print_log('outputs : %s' % outputs) 
                 
-            W_fc2, b_fc2 = self.make_layer_variables([256, num_actions], trainable, "fc2")
+            W_fc2, b_fc2 = self.make_layer_variables([256, num_actions], "fc2")
             y = tf.matmul(outputs, W_fc2) + b_fc2
             self.print_log(y)
             
             y_class = tf.nn.softmax(y)
             
-            W_fc3, b_fc3 = self.make_layer_variables([256, 1], trainable, "fc3")
+            W_fc3, b_fc3 = self.make_layer_variables([256, 1], "fc3")
             v_ = tf.matmul(outputs, W_fc3) + b_fc3
             v = tf.reshape(v_, [-1] )
         

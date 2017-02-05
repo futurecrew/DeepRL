@@ -3,7 +3,6 @@ import time
 import math
 import random
 import numpy as np
-import cv2
 import env.torcs.snakeoil3_gym as snakeoil3
 
 class TorcsEnv():
@@ -91,7 +90,7 @@ class TorcsEnv():
         imgB = obs['img'][2:img_size:3]
         return np.array(imgR, dtype=np.uint8), np.array(imgG, dtype=np.uint8), np.array(imgB, dtype=np.uint8)
     
-    def getScreenGrayscale(self, debug_display=False, debug_display_sleep=0):
+    def getState(self, debug_display=False, debug_input=None):
         if self.vision:
             obs = self.client.S.d
             img_size = len(obs['img'])
@@ -99,10 +98,9 @@ class TorcsEnv():
             green = np.array(obs['img'][1:img_size:3], dtype=np.uint8).reshape(64, 64)
             blue = np.array(obs['img'][2:img_size:3], dtype=np.uint8).reshape(64, 64)
             state = np.array(0.2989*red + 0.5870*green + 0.1140*blue, dtype=np.uint8)
-            
+
             if debug_display:
-                cv2.imshow('image', state)
-                cv2.waitKey(debug_display_sleep)
+                debug_input.show(state)
         else:
             focus=np.array(self.obs['focus'], dtype=np.float32)/200.
             speedX=np.array(self.obs['speedX'], dtype=np.float32)/300.0
@@ -240,7 +238,8 @@ def initialize_args(args):
         args.asynchronousRL = True
         args.use_annealing = True
         args.train_batch_size = 5
-        args.max_replay_memory = 30
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 30
         args.max_epoch = 20
         args.epoch_step = 500000    # 4,000,000 global steps / 8 threads
         args.train_start = 0        
@@ -261,7 +260,8 @@ def initialize_args(args):
 
         args.use_annealing = True
         
-        args.max_replay_memory = 10000
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 10000
         args.max_epoch = 20
         args.train_start = 100           # start training after filling this replay memory size
         args.epoch_step = 500000
@@ -295,7 +295,8 @@ def initialize_args(args):
             args.train_batch_size = 16
         else:
             args.train_batch_size = 64
-        args.max_replay_memory = 1000000
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 1000000
         args.max_epoch = 200
         args.epoch_step = 250000
         args.train_start = 10        # start training after filling this replay memory size

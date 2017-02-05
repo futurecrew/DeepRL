@@ -1,17 +1,16 @@
 import numpy as np
-import cv2
 import time
 import copy
 import itertools as it
 from vizdoom import *
 
 class VizDoomEnv():
-    def __init__(self, config, display_screen, use_env_frame_skip, frame_repeat):
+    def __init__(self, config, use_color_input, display_screen, use_env_frame_skip, frame_repeat):
         if config == None:
-            print 'Need to set vizdoom --config'
-            exit()
+            raise ValueError('Need to set vizdoom --config')
         self.actions = None
         self.config = config
+        self.use_color_input = use_color_input
         self.display_screen = display_screen
         if use_env_frame_skip == True:
             self.frame_repeat = frame_repeat
@@ -23,9 +22,13 @@ class VizDoomEnv():
         self.game.load_config(self.config)
         self.game.set_window_visible(self.display_screen)        
         self.game.set_mode(Mode.PLAYER)
-        self.game.set_screen_format(ScreenFormat.GRAY8)
-        self.game.set_screen_resolution(ScreenResolution.RES_640X480)
-        #self.game.set_screen_resolution(ScreenResolution.RES_160X120)
+        
+        if self.use_color_input:
+            self.game.set_screen_format(ScreenFormat.CRCGCB)
+        else:
+            self.game.set_screen_format(ScreenFormat.GRAY8)
+        #self.game.set_screen_resolution(ScreenResolution.RES_640X480)
+        self.game.set_screen_resolution(ScreenResolution.RES_160X120)
         self.game.init()
         
         self.actions = self.get_action_list(self.game)
@@ -53,6 +56,27 @@ class VizDoomEnv():
         
     def get_action_list(self, game):
         available_buttons_size = game.get_available_buttons_size()
+        
+        # DJDJ
+        if 'my_way_home' in self.config:
+            return [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        elif 'deathmatch' in self.config:
+            return [[1, 0, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 1, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 1, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 1]]
+            """
+            return [[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0],
+                        [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1]]
+            """
 
         # get each action
         actions = []
@@ -81,11 +105,14 @@ class VizDoomEnv():
     def getScreenRGB(self):
         return self.game.get_state().screen_buffer
     
-    def getScreenGrayscale(self, debug_display=False, debug_display_sleep=0):
+    def getState(self, debug_display=False, debug_input=None):
         screen = self.game.get_state().screen_buffer
         if screen is not None and debug_display:
-            cv2.imshow('image', screen)
-            cv2.waitKey(debug_display_sleep)
+            if self.use_color_input:
+                data = np.transpose(screen, [1, 2, 0])
+            else:
+                data = screen                                
+            debug_input.show(data)
         return screen
     
     def act(self, action):
@@ -99,13 +126,13 @@ class VizDoomEnv():
         
         
 def initialize_args(args):
-    args.screen_width = 160    # input screen width
-    args.screen_height = 120    # input screen height
+    args.screen_width = 90    # input screen width
+    args.screen_height = 60    # input screen height
     args.screen_history = 1    # input screen history
-    args.frame_repeat = 12    # how many frames to repeat in ale for one predicted action
+    args.frame_repeat = 4    # how many frames to repeat in ale for one predicted action
     args.use_env_frame_skip = True    # whether to use ale frame_skip feature
     args.discount_factor = 0.99    # RL discount factor
-    args.test_step = 4000    # test for this number of steps
+    args.test_step = 50000    # test for this number of steps
     args.use_random_action_on_reset = False
     args.crop_image = False         # Crop input image or zoom image
     args.run_test = True    # Whether to run test
@@ -113,13 +140,16 @@ def initialize_args(args):
     args.lost_life_terminal = True    # whether to regard lost life as terminal state
 
     args.clip_reward = False
-    args.clip_loss = False
+    args.clip_loss = True
     """
     args.clip_reward = True
     args.clip_reward_high = 1
     args.clip_reward_low = -1
-    args.clip_loss = True
     """
+
+    # DJDJ
+    #args.use_color_input = True
+    args.use_color_input = False
 
     args.rms_decay = 0.9                
     args.rms_epsilon =1e-10          
@@ -138,11 +168,12 @@ def initialize_args(args):
 
     if args.drl in ['a3c_lstm', 'a3c']:
         args.asynchronousRL = True
-        args.max_replay_memory = 10000
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 10000
         args.max_epoch = 20
-        args.epoch_step = 4000
-        args.train_step = 5
-        args.train_batch_size = 5
+        args.epoch_step = 500000
+        args.train_step = 10
+        args.train_batch_size = 10
         #args.train_epsilon_start_step = 0.2 * args.max_epoch * args.epoch_step    # start decreasing greedy epsilon from this train step 
         args.train_epsilon_start_step = 0        
         args.learning_rate = 0.0007                 # RL learning rate
@@ -154,7 +185,8 @@ def initialize_args(args):
     elif args.drl in ['1q']:
         args.asynchronousRL = True
         args.use_annealing = True
-        args.max_replay_memory = 10000
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 10000
         args.max_epoch = 20
         args.train_start = 100           # start training after filling this replay memory size
         args.epoch_step = 4000
@@ -166,43 +198,46 @@ def initialize_args(args):
         args.choose_max_action = True
         args.minibatch_random = False       # whether to use random indexing or sequential indexing for minibatch
         args.train_min_epsilon = 0.1    # minimum greedy epsilon value for exloration
-        args.update_step = 100    # copy train network into target network every this train step
+        args.update_step = 10000    # copy train network into target network every this train step
         args.save_step = 50000            # save result every this training step
         args.prioritized_replay = False
         args.max_global_step_no = args.epoch_step * args.max_epoch * args.thread_no
         args.double_dqn = False                   # whether to use double dqn
-        args.test_epsilon = 0.0                    # greedy epsilon for test
+        args.test_epsilon = 0.05                    # greedy epsilon for test
         args.prioritized_replay = False
     else:
         args.asynchronousRL = False
-        args.train_batch_size = 64
-        args.max_replay_memory = 10000
-        args.max_epoch = 20
-        args.epoch_step = 2000
+        args.train_batch_size = 32
+        if args.max_replay_memory == -1:
+            args.max_replay_memory = 1000000
+        args.max_epoch = 200
+        args.epoch_step = 200000
         args.train_start = 10        # start training after filling this replay memory size
-        args.train_step = 1                 # Train every this screen step
+        args.train_step = 4                 # Train every this screen step
         args.learning_rate = 0.00025                 
         args.choose_max_action = True
         args.minibatch_random = True
         args.train_min_epsilon = 0.1    # minimum greedy epsilon value for exloration
-        args.update_step = 100    # copy train network into target network every this train step
+        args.update_step = 10000    # copy train network into target network every this train step
         args.optimizer = 'RMSProp'    # 
         args.save_step = 50000            # save result every this training step
-        args.train_epsilon_start_step = args.max_epoch * args.epoch_step * 0.1    # start decreasing greedy epsilon from this train step 
-        args.train_epsilon_end_step = args.max_epoch * args.epoch_step * 0.6    # end decreasing greedy epsilon from this train step 
-        args.test_epsilon = 0.0                    # greedy epsilon for test
+        args.train_epsilon_start_step = 0    # start decreasing greedy epsilon from this train step 
+        args.train_epsilon_end_step = 1000000    # end decreasing greedy epsilon from this train step 
 
         if args.drl == 'dqn':                     # DQN hyper params
             args.double_dqn = False                   # whether to use double dqn
+            args.test_epsilon = 0.05                    # greedy epsilon for test
             args.prioritized_replay = False
         elif args.drl == 'double_dqn':    # Double DQN hyper params
             args.double_dqn = True
             args.train_min_epsilon = 0.01    # 
-            args.update_step = 300    #
+            args.test_epsilon = 0.05    # 
+            args.update_step = 30000    #
             args.prioritized_replay = False 
         elif args.drl == 'prioritized_rank':    # Prioritized experience replay params for RANK
             args.prioritized_replay = True    # 
             args.learning_rate = 0.00025 / 4    # 
+            args.test_epsilon = 0.05    # 
             args.prioritized_mode = 'RANK'    # 
             args.sampling_alpha = 0.7    # 
             args.sampling_beta = 0.5    # 
@@ -211,6 +246,7 @@ def initialize_args(args):
         elif args.drl == 'prioritized_proportion':    # Prioritized experience replay params for PROPORTION
             args.prioritized_replay = True    # 
             args.learning_rate = 0.00025 / 4    # 
+            args.test_epsilon = 0.05    # 
             args.prioritized_mode = 'PROPORTION'    # 
             args.sampling_alpha = 0.6    # 
             args.sampling_beta = 0.4    # 

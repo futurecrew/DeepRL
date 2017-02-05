@@ -22,6 +22,7 @@ def get_args():
     parser.add_argument('--snapshot', type=str, default=None, help='trained file to resume training or to replay') 
     parser.add_argument('--device', type=str, default='', help='gpu or cpu')
     parser.add_argument('--show-screen', action='store_true', help='whether to show display or not')
+    parser.add_argument('--max-replay-memory', type=int, default=-1, help='maximum size of replay memory')
 
     if len(sys.argv) < 2:
         raise ValueError('Need arguments to run.')
@@ -46,6 +47,7 @@ def get_args():
     args = parser.parse_args()
     args.game = get_game_name(env)
     args.snapshot_folder = 'snapshot/' + args.game
+    args.use_color_input = False
 
     init_func = getattr(module, 'initialize_args')
     init_func(args)
@@ -61,7 +63,7 @@ def get_env(args, initialize, show_screen):
         env = TorcsEnv(args.vision, args.bin, args.port, args.track, show_screen)
     elif args.env == 'vizdoom':
         from env.vizdoom.vizdoom_env import VizDoomEnv
-        env = VizDoomEnv(args.config, show_screen, args.use_env_frame_skip, args.frame_repeat)
+        env = VizDoomEnv(args.config, args.use_color_input, show_screen, args.use_env_frame_skip, args.frame_repeat)
 
     if initialize:
         env.initialize()
