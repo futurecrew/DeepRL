@@ -11,11 +11,15 @@
   <br>
   sudo python get-pip.py
 
-- numpy
+- numpy, scipy, pillow, matplotlib
   <br>
   sudo pip install numpy
-
-- opencv2
+  <br>
+  sudo pip install scipy
+  <br>
+  sudo apt-get install python-pillow
+  <br>
+  sudo apt-get install python-matplotlib
   <br>
   sudo apt-get install python-opencv
 
