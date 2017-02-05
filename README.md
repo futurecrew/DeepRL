@@ -43,7 +43,7 @@ Click the image to watch the video.
   - Python-2.7
   - Numpy
   - Tensorflow-0.11
-  - opencv2
+  - scipy, pillow, matplotlib
   - Arcade-Learning-Environment
   - Torcs (optional)
   - Vizdoom (in working)
