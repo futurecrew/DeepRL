@@ -5,22 +5,16 @@
   To run the project the following packages are required.
   <br>
   
-- pip
+- pip, scipy, matplotlib, numpy
   <br>
-  Download pip from https://bootstrap.pypa.io/get-pip.py
-  <br>
-  sudo python get-pip.py
-
-- numpy, scipy, pillow, matplotlib
-  <br>
-  sudo pip install numpy
+  sudo apt-get install python-pip python-dev libblas-dev liblapack-dev gportran
   <br>
   sudo pip install scipy
   <br>
-  sudo apt-get install python-pillow
-  <br>
   sudo apt-get install python-matplotlib
-
+  <br>
+  sudo pip install numpy
+  <br>
 - tensorflow
   <br>
   The project code is currently based on Tensorflow-0.11.
@@ -31,7 +25,7 @@
   <br>
   https://github.com/mgbellemare/Arcade-Learning-Environment
   
-- Torcs
+- Torcs (if you want to train Torcs)
   <br>
   See the following instruction.
   <br>
