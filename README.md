@@ -41,9 +41,8 @@ Click the image to watch the video.
 
 ## Requirements
   - Python-2.7
-  - Numpy
+  - pip, scipy, matplotlib, numpy
   - Tensorflow-0.11
-  - scipy, pillow, matplotlib
   - Arcade-Learning-Environment
   - Torcs (optional)
   - Vizdoom (in working)
