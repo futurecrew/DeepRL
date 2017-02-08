@@ -73,12 +73,12 @@ ex) python play.py snapshot/space_invaders/20161114_003838/a3c_79993828
 
 ## Debug console commands
 While training you can send several debug commands in the console.
-- p : print debug message or not
+- p : print debug logs or not
 - u : pause training or not
-- quit : finish training
-- d : display screen or not
-- - : make displaying faster
-- + : make displaying slower
+- quit : finish running
+- d : show the current running screen or not. You can see how the training is going on in the game screen.
+- - : show the screen more fast
+- + : show the screen more slowly
 
 
 ## Reference projects
