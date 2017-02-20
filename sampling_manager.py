@@ -179,9 +179,13 @@ class SamplingManager:
         if data_len == None:
             data_len = len(self.heap)
             
+        last_data_index = len(self.heap) - 1
         self.total_psum = 0
         for i in range(1, data_len):
             self.total_psum += self.get_p(i)
+            if self.heap[i][1] == 0:        # ignore data with 0 td
+                last_data_index = i - 1
+                break
 
         segment = self.total_psum / self.batch_size
         segment_sum = 0
@@ -193,7 +197,7 @@ class SamplingManager:
                 segment_index.append(i)
                 segment_no += 1
                 if len(segment_index) == self.batch_size - 1:
-                    segment_index.append(len(self.heap) - 1)
+                    segment_index.append(last_data_index)
                     break
         
         """

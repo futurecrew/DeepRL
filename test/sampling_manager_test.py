@@ -37,6 +37,7 @@ class TestSamplingManager(unittest.TestCase):
         self.args.screen_history = 4
         self.args.screen_height = 84
         self.args.screen_width = 84
+        self.args.use_color_input = False
 
         self.args.prioritized_mode = self.mode
         self.args.sampling_alpha =self.alpha
