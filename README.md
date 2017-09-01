@@ -20,13 +20,18 @@ In my PC (i7 CPU, Titan-X Maxwell),
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/space_invaders_a3c.png" width="420">
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/breakout_a3c.png" width="420">
 </nobr>
+<br>
   - A3C FF took 20 hours for 80M global steps (nips network)
+<br>
   - A3C LSTM took 44 hours for 80M global steps (nips network)
 
 <p>
 <img src="https://github.com/only4hj/DeepRL/blob/master/snapshot/hero_priority.png" width="420">
+<br>
   - DQN took 96 hours for 80M steps (shown 11M steps, nature network)
+<br>
   - Double-Q took 112 hours for 80M steps (shown 11M steps, nature network)
+<br>
   - Prioritized took 112 hours for 80M steps (shown 11M steps, nature network)
 
 
@@ -77,8 +82,8 @@ While training you can send several debug commands in the console.
 - u : pause training or not
 - quit : finish running
 - d : show the current running screen or not. You can see how the training is going on in the game screen.
-- - : show the screen more fast
-- + : show the screen more slowly
+- \- : show the screen more fast
+- \+ : show the screen more slowly
 
 
 ## Reference projects
